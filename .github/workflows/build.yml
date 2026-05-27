@@ -1,0 +1,52 @@
+name: Build SIM Ijazah
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Checkout kode
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js (tanpa cache agar tidak butuh package-lock.json)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Build React (Vite)
+      - name: Build React
+        run: npx vite build
+
+      # 5. Build Electron installer (.exe)
+      - name: Build Electron Windows
+        run: npx electron-builder --win --x64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 6. Upload hasil build sebagai artifact
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SIM-Ijazah-Windows-Installer
+          path: |
+            dist-electron/*.exe
+            dist-electron/*.zip
+          retention-days: 30
+
+  # Optional: build juga untuk Mac & Linux
+  # build-mac:
+  #   runs-on: macos-latest
+  #   steps: ...
