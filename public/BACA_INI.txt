@@ -1,0 +1,4 @@
+Letakkan file icon.ico di folder ini (public/).
+Ukuran minimal: 256x256 pixel.
+
+Kalau tidak ada icon, hapus baris "icon" di package.json bagian "win".
