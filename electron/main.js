@@ -402,7 +402,7 @@ function registerIPC() {
   ipcMain.handle('export:excel_angkatan', async (_, angkatan_id) => {
     try {
       const { exportExcelAngkatan } = require('./pdf-generator')
-      const angkatan = db.prepare('SELECT * FROM angkatan WHERE id=?').get(angkatan_id)
+      const angkatan  = angkatan_id ? db.prepare('SELECT * FROM angkatan WHERE id=?').get(angkatan_id) : null
       const siswaList = angkatan_id
         ? db.prepare(`SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama`).all(angkatan_id)
         : db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
@@ -418,9 +418,9 @@ function registerIPC() {
         nilaiData, ujianSemId: ujianSem?.id, raportSemIds: raportSems.map(s=>s.id),
         br, bu, totalB
       })
-      await shell.openPath(filePath)
-      return { ok: true, path: filePath }
-    } catch (e) { return { ok: false, error: e.message } }
+      await shell.openPath(String(filePath))
+      return { ok: true, path: String(filePath) }
+    } catch (e) { return { ok: false, error: String(e && e.message ? e.message : e) } }
   })
 
   ipcMain.handle('pdf:nilai_ijazah', async (_, angkatan_id) => {
