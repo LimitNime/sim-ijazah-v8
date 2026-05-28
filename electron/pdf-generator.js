@@ -124,7 +124,7 @@ function drawKopResmi(doc, s, ml, cw) {
 // ══════════════════════════════════════════════════════════════════════════
 function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId }) {
   const PDFDocument = require('pdfkit')
-  const F4skl = [595.28, 841.89]
+  const F4skl = [609.4, 935.4]  // F4 portrait 215x330mm
   const doc = new PDFDocument({ size: F4skl, margin: 0 })
   const filePath = path.join(outputPath, 'SKL_Kelulusan.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -133,8 +133,8 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
   const ml = 45, mr = 45, cw = pw - ml - mr
 
   function dotLine(x, y, w) {
-    doc.save().dash(1, { space: 2 }).lineWidth(0.4).stroke('#000')
-      .moveTo(x, y).lineTo(x + w, y).stroke().undash().restore()
+    doc.save().lineWidth(0.5).stroke('#000')
+      .moveTo(x, y).lineTo(x + w, y).stroke().restore()
   }
 
   const __electronDir = path.dirname(__filename)
@@ -171,8 +171,8 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
     const tglRapat = s.tgl_rapat ? fmtTgl(s.tgl_rapat) : (s.tgl_lulus ? tglSk : '.....................')
     const pembukaText = `Berdasarkan hasil rapat Dewan Guru yang dilaksankan tanggal ${tglRapat}, dan setelah dipastikan bahwa seluruh kriteria kelulusan telah terpenuhi sesuai dengan peraturan perundang undangan, Kepala ${s.nama || ''} Kabupaten ${s.kabupaten || 'Cirebon'} menerangkan Bahwa:`
     doc.font('Helvetica').fontSize(10).fillColor('#000')
-      .text(pembukaText, ml, y, { width: cw, align: 'justify' })
-    y += doc.heightOfString(pembukaText, { width: cw }) + 10
+      .text(pembukaText, ml, y, { width: cw, align: 'justify', lineGap: 4 })
+    y += doc.heightOfString(pembukaText, { width: cw, lineGap: 4 }) + 14
 
     // ════════════════════════════════════════════════════════════════════
     // BIODATA — sesuai template asli: Nama Lengkap, No Peserta, Tgl Kelulusan
@@ -191,7 +191,7 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
       } else {
         dotLine(valX, y + 10, valW)
       }
-      y += 13
+      y += 16  // 1.5x
     }
 
     bioRow('Nama Lengkap',               siswa.nama || '')
@@ -216,8 +216,8 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
 
     const subPara = `Dari ${s.nama || ''} Tahun Pelajaran ${s.tahun_ajaran || ''} dengan memperoleh nilai sebagai berikut :`
     doc.font('Helvetica').fontSize(10)
-      .text(subPara, ml, y, { width: cw })
-    y += doc.heightOfString(subPara, { width: cw }) + 6
+      .text(subPara, ml, y, { width: cw, lineGap: 4 })
+    y += doc.heightOfString(subPara, { width: cw, lineGap: 4 }) + 10
 
     // ════════════════════════════════════════════════════════════════════
     // TABEL NILAI — 2 kolom: NO | MATA PELAJARAN | NILAI
@@ -309,8 +309,8 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
     // ════════════════════════════════════════════════════════════════════
     const penutupText = 'Demikan surat keterangan ini dibuat dengan sebenarnya untuk diketahui dan dipergunakan sebagaimana mestinya, dan bersifat/berlaku sementara sampai dengan diterbitkannya ijazah sebagai bukti kelulusan.'
     doc.font('Helvetica').fontSize(10).fillColor('#000')
-      .text(penutupText, ml, y, { width: cw, align: 'justify' })
-    y += doc.heightOfString(penutupText, { width: cw }) + 16
+      .text(penutupText, ml, y, { width: cw, align: 'justify', lineGap: 4 })
+    y += doc.heightOfString(penutupText, { width: cw, lineGap: 4 }) + 20
 
     // ════════════════════════════════════════════════════════════════════
     // TTD KEPALA — kanan, garis lebih lebar, nama bold + underline
@@ -346,7 +346,7 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
 
 function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const PDFDocument = require('pdfkit')
-  const F4ni = [595.28, 841.89]
+  const F4ni = [609.4, 935.4]   // F4 portrait 215x330mm
   const doc = new PDFDocument({ size: F4ni, margin: 0 })
   const filePath = path.join(outputPath, 'Nilai_Ijazah_Semua.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -356,8 +356,8 @@ function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nil
   const mb = 24
 
   function dotLineGray(x, y, w) {
-    doc.save().dash(1,{space:2}).lineWidth(0.4).stroke('#555')
-      .moveTo(x,y).lineTo(x+w,y).stroke().undash().restore()
+    doc.save().lineWidth(0.4).stroke('#888')
+      .moveTo(x,y).lineTo(x+w,y).stroke().restore()
   }
 
   function calcNij(siswaId, mapelId) {
@@ -534,7 +534,7 @@ function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nil
 function generateDKN(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const PDFDocument = require('pdfkit')
   // F4 landscape = 330mm x 215mm → dalam pt
-  const F4L = [841.89, 595.28]
+  const F4L = [935.4, 609.4]    // F4 landscape 330x215mm
   const doc = new PDFDocument({ size: F4L, margin: 0 })
   const filePath = path.join(outputPath, 'DKN_Lengkap.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -710,159 +710,185 @@ function generateDKN(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
 
 
 function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mapelList, semList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
-  const XLSX = require('xlsx')
+  const ExcelJS = require('exceljs')
+  const path    = require('path')
+  const wb      = new ExcelJS.Workbook()
+  wb.creator    = 'SIM Ijazah'
+  wb.created    = new Date()
 
-  const wb = XLSX.utils.book_new()
-  const raportSems = semList.filter(sm => raportSemIds.includes(sm.id))
-  const nSem = raportSems.length
+  const raportSems = semList.filter(s => !s.is_ujian)
+  const ujianSem   = semList.find(s => s.is_ujian)
 
-  // ── Sheet 1: REKAP AKHIR (mirip halaman terakhir PDF) ──────────────────
-  const rekapRows = []
+  // Warna tema
+  const C_HEADER    = '1E3A5F'  // biru gelap
+  const C_SUBHEADER = '2E6DA4'  // biru sedang
+  const C_ALT       = 'EBF3FB'  // biru muda alternating
+  const C_WHITE     = 'FFFFFF'
+  const C_BORDER    = { style: 'thin', color: { argb: 'FFCCCCCC' } }
+  const C_BORDER_H  = { style: 'thin', color: { argb: 'FF000000' } }
 
-  // Header baris 1
-  const hdr1 = ['NO', 'NAMA SISWA']
-  mapelList.forEach(m => { hdr1.push(m.nama); for(let i=1;i<nSem;i++) hdr1.push('') })
-  hdr1.push('JUMLAH', 'RATA-RATA')
-  rekapRows.push(hdr1)
+  function styleHeader(cell, text, bold = true) {
+    cell.value = text
+    cell.font  = { bold, color: { argb: 'FF' + C_WHITE }, size: 10, name: 'Calibri' }
+    cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C_HEADER } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    cell.border = { top: C_BORDER_H, bottom: C_BORDER_H, left: C_BORDER_H, right: C_BORDER_H }
+  }
 
-  // Header baris 2: sub-header semester
-  const hdr2 = ['', '']
-  mapelList.forEach(() => {
-    raportSems.forEach((sm, i) => hdr2.push(`SMT ${i+1}`))
-  })
-  hdr2.push('', '')
-  rekapRows.push(hdr2)
+  function styleSubHeader(cell, text) {
+    cell.value = text
+    cell.font  = { bold: true, color: { argb: 'FF' + C_WHITE }, size: 9, name: 'Calibri' }
+    cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C_SUBHEADER } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    cell.border = { top: C_BORDER_H, bottom: C_BORDER_H, left: C_BORDER, right: C_BORDER }
+  }
 
-  // Data siswa
-  siswaList.forEach((siswa, i) => {
-    const row = [i+1, siswa.nama||'']
-    const nils = nilaiData[siswa.id] || []
+  function styleData(cell, value, rowIdx, align = 'center') {
+    cell.value = value
+    const bg = rowIdx % 2 === 0 ? C_WHITE : C_ALT
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bg } }
+    cell.alignment = { horizontal: align, vertical: 'middle' }
+    cell.font  = { size: 9, name: 'Calibri' }
+    cell.border = { top: C_BORDER, bottom: C_BORDER, left: C_BORDER, right: C_BORDER }
+  }
+
+  function getNilai(siswaId, mapelId, semId) {
+    return (nilaiData[siswaId] || []).find(n => n.mapel_id === mapelId && n.semester_id === semId)
+  }
+
+  // ── Sheet 1: Rekap Nilai ─────────────────────────────────────────────
+  const ws1 = wb.addWorksheet('Rekap Nilai')
+  const h1  = ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama), 'Rata-rata', 'Nilai Ijazah']
+  ws1.getRow(1).height = 40
+  h1.forEach((txt, i) => styleHeader(ws1.getRow(1).getCell(i + 1), txt))
+  ws1.columns = [
+    { width: 5 }, { width: 32 }, { width: 14 },
+    ...mapelList.map(() => ({ width: 11 })),
+    { width: 12 }, { width: 13 },
+  ]
+  ws1.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }]
+
+  siswaList.forEach((sw, ri) => {
+    const row = ws1.getRow(ri + 2)
+    row.height = 16
     let jumlah = 0, cnt = 0
+    styleData(row.getCell(1), ri + 1, ri, 'center')
+    styleData(row.getCell(2), sw.nama || '', ri, 'left')
+    styleData(row.getCell(3), sw.nisn || '', ri, 'center')
+    mapelList.forEach((m, mi) => {
+      const raps = raportSems.map(s => getNilai(sw.id, m.id, s.id)?.nilai_p).filter(v => v != null)
+      const raport = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
+      const ujN  = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      const ujVal = ujN?.nilai_ujian ?? null
+      const nij  = raport != null && ujVal != null ? (raport * br + ujVal * bu) / totalB : null
+      const val  = nij != null ? parseFloat(nij.toFixed(2)) : null
+      styleData(row.getCell(mi + 4), val ?? '', ri, 'center')
+      if (val != null) { jumlah += val; cnt++ }
+    })
+    const avg = cnt > 0 ? parseFloat((jumlah / cnt).toFixed(2)) : ''
+    styleData(row.getCell(mapelList.length + 4), avg, ri, 'center')
+    styleData(row.getCell(mapelList.length + 5), avg, ri, 'center')
+  })
 
-    mapelList.forEach(m => {
-      raportSems.forEach(sm => {
-        const n = nils.find(n => n.mapel_id===m.id && n.semester_id===sm.id)
-        if (n && n.nilai_p!=null) {
-          const val = parseFloat(n.nilai_p)
-          row.push(parseFloat(val.toFixed(2))); jumlah+=val; cnt++
-        } else {
-          row.push('')
-        }
+  // ── Sheet 2: Nilai Per Mapel ─────────────────────────────────────────
+  const ws2 = wb.addWorksheet('Nilai Per Mapel')
+  const semLabels = raportSems.map(s => s.label)
+  const h2 = ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Nilai US', 'Rata Raport', 'Nilai Ijazah']
+  ws2.views = [{ state: 'frozen', xSplit: 3, ySplit: 2 }]
+  ws2.getRow(1).height = 18
+  ws2.getRow(2).height = 28
+  styleSubHeader(ws2.getRow(1).getCell(1), 'No')
+  styleSubHeader(ws2.getRow(1).getCell(2), 'Nama Siswa')
+  styleSubHeader(ws2.getRow(1).getCell(3), 'NISN')
+  ws2.columns = [
+    { width: 5 }, { width: 32 }, { width: 14 },
+    ...semLabels.map(() => ({ width: 10 })),
+    { width: 11 }, { width: 13 }, { width: 13 },
+  ]
+
+  mapelList.forEach((m, mi) => {
+    const startCol = 4
+    // Header baris 1: nama mapel di kolom pertama semester
+    const cell = ws2.getRow(1).getCell(startCol + mi * (semLabels.length + 3))
+    // Baris 2: sub-header semester
+    h2.forEach((txt, i) => styleHeader(ws2.getRow(2).getCell(i + 1), txt))
+
+    siswaList.forEach((sw, ri) => {
+      const row = ws2.getRow(ri + 3 + mi * (siswaList.length + 2))
+      // Skip untuk sheet per mapel — buat sheet baru per mapel
+    })
+  })
+
+  // Simplifikasi: satu sheet per mapel dengan siswa sebagai baris
+  // Reset dan buat ulang ws2 lebih sederhana
+  wb.removeWorksheet(ws2.id)
+  mapelList.forEach((m, mi) => {
+    const wsM = wb.addWorksheet(m.nama.slice(0, 31))
+    const hM  = ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Nilai US', 'Rata Raport', 'Nilai Ijazah']
+    wsM.getRow(1).height = 36
+    hM.forEach((txt, i) => styleHeader(wsM.getRow(1).getCell(i + 1), txt))
+    wsM.columns = [
+      { width: 5 }, { width: 32 }, { width: 14 },
+      ...semLabels.map(() => ({ width: 10 })),
+      { width: 11 }, { width: 13 }, { width: 13 },
+    ]
+    wsM.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }]
+
+    siswaList.forEach((sw, ri) => {
+      const row = wsM.getRow(ri + 2)
+      row.height = 16
+      styleData(row.getCell(1), ri + 1, ri)
+      styleData(row.getCell(2), sw.nama || '', ri, 'left')
+      styleData(row.getCell(3), sw.nisn || '', ri, 'center')
+      const rapVals = []
+      raportSems.forEach((sem, si) => {
+        const n = getNilai(sw.id, m.id, sem.id)
+        const v = n?.nilai_p != null ? parseFloat(n.nilai_p) : null
+        styleData(row.getCell(si + 4), v ?? '', ri)
+        if (v != null) rapVals.push(v)
       })
+      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
+      const rataR = rapVals.length === raportSems.length ? rapVals.reduce((a, b) => a + b, 0) / rapVals.length : null
+      const nij   = rataR != null && ujVal != null ? (rataR * br + ujVal * bu) / totalB : null
+      styleData(row.getCell(raportSems.length + 4), ujVal ?? '', ri)
+      styleData(row.getCell(raportSems.length + 5), rataR != null ? parseFloat(rataR.toFixed(2)) : '', ri)
+      styleData(row.getCell(raportSems.length + 6), nij   != null ? parseFloat(nij.toFixed(2))   : '', ri)
     })
-
-    row.push(cnt>0 ? parseFloat(jumlah.toFixed(2)) : '')
-    row.push(cnt>0 ? parseFloat((jumlah/cnt).toFixed(2)) : '')
-    rekapRows.push(row)
   })
 
-  const wsRekap = XLSX.utils.aoa_to_sheet(rekapRows)
+  // ── Sheet Nilai Ijazah (Ringkasan) ───────────────────────────────────
+  const wsN = wb.addWorksheet('Nilai Ijazah')
+  const hN  = ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama.slice(0, 20)), 'Rata-rata NIJ']
+  wsN.getRow(1).height = 40
+  hN.forEach((txt, i) => styleHeader(wsN.getRow(1).getCell(i + 1), txt))
+  wsN.columns = [{ width: 5 }, { width: 32 }, { width: 14 }, ...mapelList.map(() => ({ width: 12 })), { width: 14 }]
+  wsN.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }]
 
-  // Merge header mapel
-  if (!wsRekap['!merges']) wsRekap['!merges'] = []
-  let col = 2
-  mapelList.forEach(m => {
-    if (nSem > 1) {
-      wsRekap['!merges'].push({ s:{r:0,c:col}, e:{r:0,c:col+nSem-1} })
-    }
-    col += nSem
-  })
-
-  // Lebar kolom
-  const wscols = [{ wch:5 }, { wch:30 }]
-  mapelList.forEach(() => { raportSems.forEach(() => wscols.push({ wch:8 })) })
-  wscols.push({ wch:10 }, { wch:12 })
-  wsRekap['!cols'] = wscols
-  wsRekap['!freeze'] = { xSplit: 2, ySplit: 2 }
-
-  XLSX.utils.book_append_sheet(wb, wsRekap, 'Rekap Nilai')
-
-  // ── Sheet 2: PER MAPEL (satu sheet tiap mapel, mirip halaman 6-18 PDF) ──
-  mapelList.forEach(m => {
-    const rows = []
-
-    // Header
-    const hm = ['NO', 'NAMA']
-    raportSems.forEach((sm, i) => hm.push(`SMT ${i+1}`))
-    hm.push('Rata Raport', 'Nilai UM', 'Nilai Ijazah')
-    rows.push(hm)
-
-    siswaList.forEach((siswa, i) => {
-      const row = [i+1, siswa.nama||'']
-      const nils = nilaiData[siswa.id]||[]
-      const raps = []
-
-      raportSems.forEach(sm => {
-        const n = nils.find(n => n.mapel_id===m.id && n.semester_id===sm.id)
-        if (n && n.nilai_p!=null) {
-          const val = parseFloat(n.nilai_p)
-          row.push(parseFloat(val.toFixed(2))); raps.push(val)
-        } else { row.push('') }
-      })
-
-      const rataRap = raps.length ? raps.reduce((a,b)=>a+b,0)/raps.length : null
-      const umRow = nils.find(n => n.mapel_id===m.id && n.semester_id===ujianSemId)
-      const um = umRow && umRow.nilai_ujian!=null ? parseFloat(umRow.nilai_ujian) : null
-      const nij = rataRap!=null && um!=null ? (rataRap*br+um*bu)/totalB : null
-
-      row.push(rataRap!=null ? parseFloat(rataRap.toFixed(2)) : '')
-      row.push(um!=null ? um : '')
-      row.push(nij!=null ? parseFloat(nij.toFixed(2)) : '')
-      rows.push(row)
+  siswaList.forEach((sw, ri) => {
+    const row = wsN.getRow(ri + 2)
+    row.height = 16
+    styleData(row.getCell(1), ri + 1, ri)
+    styleData(row.getCell(2), sw.nama || '', ri, 'left')
+    styleData(row.getCell(3), sw.nisn || '', ri, 'center')
+    let sumNij = 0, cntNij = 0
+    mapelList.forEach((m, mi) => {
+      const raps = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
+      const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
+      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      const ujVal = ujN?.nilai_ujian ?? null
+      const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
+      styleData(row.getCell(mi + 4), nij ?? '', ri)
+      if (nij != null) { sumNij += nij; cntNij++ }
     })
-
-    const ws = XLSX.utils.aoa_to_sheet(rows)
-    const wc = [{ wch:5 }, { wch:30 }]
-    raportSems.forEach(() => wc.push({ wch:8 }))
-    wc.push({ wch:12 }, { wch:10 }, { wch:12 })
-    ws['!cols'] = wc
-    ws['!freeze'] = { xSplit: 2, ySplit: 1 }
-
-    // Nama sheet maks 31 karakter
-    const sheetName = m.nama.length > 28 ? m.nama.slice(0,28)+'.' : m.nama
-    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    const avgNij = cntNij > 0 ? parseFloat((sumNij / cntNij).toFixed(2)) : ''
+    styleData(row.getCell(mapelList.length + 4), avgNij, ri)
   })
 
-  // ── Sheet 3: REKAP NILAI IJAZAH ────────────────────────────────────────
-  const nijRows = [['NO', 'NAMA SISWA', 'NISN', ...mapelList.map(m=>m.nama), 'RATA-RATA']]
-  siswaList.forEach((siswa, i) => {
-    const row = [i+1, siswa.nama||'', siswa.nisn||'-']
-    const nils = nilaiData[siswa.id]||[]
-    let sum=0, cnt=0
-    mapelList.forEach(m => {
-      const raps = nils.filter(n=>raportSemIds.includes(n.semester_id)&&n.nilai_p!=null&&n.mapel_id===m.id)
-      const raport = raps.length ? raps.reduce((a,r)=>a+parseFloat(r.nilai_p),0)/raps.length : null
-      const um = nils.find(n=>n.mapel_id===m.id&&n.semester_id===ujianSemId&&n.nilai_ujian!=null)
-      const nij = raport!=null&&um ? (raport*br+parseFloat(um.nilai_ujian)*bu)/totalB : null
-      row.push(nij!=null ? parseFloat(nij.toFixed(2)) : '')
-      if (nij) { sum+=nij; cnt++ }
-    })
-    row.push(cnt>0 ? parseFloat((sum/cnt).toFixed(2)) : '')
-    nijRows.push(row)
-  })
-
-  const wsNij = XLSX.utils.aoa_to_sheet(nijRows)
-  const wcNij = [{ wch:5 }, { wch:30 }, { wch:16 }, ...mapelList.map(()=>({ wch:10 })), { wch:12 }]
-  wsNij['!cols'] = wcNij
-  wsNij['!freeze'] = { xSplit: 3, ySplit: 1 }
-  XLSX.utils.book_append_sheet(wb, wsNij, 'Nilai Ijazah')
-
-  const fname = `Nilai_Angkatan_${(angkatan?.nama||'').replace(/[^a-zA-Z0-9]/g,'_')}_${Date.now()}.xlsx`
+  const fname = `Nilai_Angkatan_${(angkatan?.nama || 'Semua').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`
   const filePath = path.join(outputPath, fname)
-  XLSX.writeFile(wb, filePath)
-  return filePath
+  return wb.xlsx.writeFile(filePath).then(() => filePath)
 }
-
-
-// ══════════════════════════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════════════════════════
-//  IJAZAH — 1 halaman per siswa (sesuai blanko resmi Kemdikbud/Kemenag)
-
-
-// ══════════════════════════════════════════════════════════════════════════
-//  IJAZAH — pixel-perfect blanko resmi Kemdikbud/Kemenag
-// ══════════════════════════════════════════════════════════════════════════
 
 function generateIjazah(outputPath, { sekolah: s, siswaList }) {
   const PDFDocument = require('pdfkit')
@@ -898,7 +924,15 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
   siswaList.forEach((siswa, idx) => {
     if (idx > 0) doc.addPage()
 
-    // Border dihilangkan sesuai permintaan
+    // ════════════════════════════════════════════════════════════════════
+    // BORDER KOTAK LUAR — ganda (sesuai blanko ijazah resmi)
+    // ════════════════════════════════════════════════════════════════════
+    const bOuter = 6   // jarak dari tepi halaman ke garis luar
+    const bInner = 11  // jarak dari tepi halaman ke garis dalam
+    doc.save().lineWidth(2).stroke('#000')
+      .rect(bOuter, bOuter, pw - bOuter*2, ph - bOuter*2).stroke().restore()
+    doc.save().lineWidth(0.6).stroke('#000')
+      .rect(bInner, bInner, pw - bInner*2, ph - bInner*2).stroke().restore()
 
     // ════════════════════════════════════════════════════════════════════
     // No. Ijazah — pojok kanan atas
@@ -1006,12 +1040,13 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
     // ════════════════════════════════════════════════════════════════════
     // NAMA SISWA — garis titik panjang (nama dicetak di atasnya oleh sistem)
     // ════════════════════════════════════════════════════════════════════
+    y += 10  // padding atas nama
     if (siswa.nama) {
       const namaSiswa = siswa.nama.toUpperCase()
       doc.font('Helvetica-Bold').fontSize(12).fillColor('#000')
         .text(namaSiswa, ml, y, { width: cw, align: 'center' })
     }
-    y += 14
+    y += 18  // padding bawah nama
 
     // ════════════════════════════════════════════════════════════════════
     // BIODATA SISWA
@@ -1070,8 +1105,8 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
     // Paragraf mengalir — satu blok teks tanpa garis
     const paraText = `Berdasarkan Keputusan Kepala ${s.nama || ''} Nomor ${noSk} Tanggal ${tglSk} setelah memenuhi seluruh kriteria sesuai dengan peraturan perundang-undangan.`
     doc.font('Helvetica').fontSize(9.5).fillColor('#000')
-      .text(paraText, lx, y, { width: cw - 8, align: 'justify', lineGap: 2 })
-    y += doc.heightOfString(paraText, { width: cw - 8, fontSize: 9.5, lineGap: 2 }) + 24
+      .text(paraText, lx, y, { width: cw - 8, align: 'justify', lineGap: 4 })
+    y += doc.heightOfString(paraText, { width: cw - 8, fontSize: 9.5, lineGap: 4 }) + 28
 
     // ════════════════════════════════════════════════════════════════════
     // FOTO + TTD
@@ -1144,7 +1179,7 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
 function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const PDFDocument = require('pdfkit')
   // F4 = 215mm x 330mm → dalam pt
-  const F4 = [595.28, 841.89]
+  const F4 = [609.4, 935.4]
   const doc = new PDFDocument({ size: F4, margin: 0 })
   const filePath = path.join(outputPath, 'Transkrip_Nilai_Semua.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -1154,8 +1189,8 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
   const mb = 28   // margin bawah
 
   function dotLine(x, y, w) {
-    doc.save().dash(1, { space: 2 }).lineWidth(0.45).stroke('#000')
-      .moveTo(x, y).lineTo(x + w, y).stroke().undash().restore()
+    doc.save().lineWidth(0.5).stroke('#000')
+      .moveTo(x, y).lineTo(x + w, y).stroke().restore()
   }
 
   function getAvgNilai(siswaId, mapelId) {
@@ -1327,7 +1362,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
       .text(
         'Transkrip Nilai ini telah dicetak ulang tanpa mengubah muatan Transkrip Nilai dan ' +
         'ditandatangani sesuai dengan ketentuan yang berlaku.',
-        ml, y, { width: cw, align: 'justify' }
+        ml, y, { width: cw, align: 'justify', lineGap: 4 }
       )
   })
 
@@ -1339,7 +1374,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
 
 function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
   const PDFDocument = require('pdfkit')
-  const F4sk = [595.28, 841.89]
+  const F4sk = [609.4, 935.4]
   const doc = new PDFDocument({ size: F4sk, margin: 0 })
   const filePath = path.join(outputPath, 'SK_Penetapan_Kelulusan.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -1397,7 +1432,7 @@ function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
     const h = doc.heightOfString(teks, { width: txtW, font: 'Helvetica', fontSize: 9.5 })
     doc.font('Helvetica').fontSize(9.5).fillColor('#000')
       .text(no, ml + lblW + 6, y, { width: noW, lineBreak: false })
-      .text(teks, txtX, y, { width: txtW, align: 'justify' })
+      .text(teks, txtX, y, { width: txtW, align: 'justify', lineGap: 4 })
     y += h + 5
   }
 
@@ -1430,9 +1465,9 @@ function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
       .text(judul, txtX, y, { width: txtW })
     y += 12
     if (isi) {
-      const h = doc.heightOfString(isi, { width: txtW, font: 'Helvetica', fontSize: 9.5 })
+      const h = doc.heightOfString(isi, { width: txtW, font: 'Helvetica', fontSize: 9.5, lineGap: 4 })
       doc.font('Helvetica').fontSize(9.5)
-        .text(isi, txtX, y, { width: txtW, align: 'justify' })
+        .text(isi, txtX, y, { width: txtW, align: 'justify', lineGap: 4 })
       y += h + 8
     }
   }
@@ -1545,7 +1580,7 @@ function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
 function generateSKKB(outputPath, { sekolah: s, siswaList }) {
   const PDFDocument = require('pdfkit')
   // F4 = 215mm x 330mm → dalam pt (1mm = 2.8346pt)
-  const F4 = [595.28, 841.89]
+  const F4 = [609.4, 935.4]
   const doc = new PDFDocument({ size: F4, margin: 0 })
   const filePath = path.join(outputPath, 'SKKB_Semua.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -1628,15 +1663,15 @@ function generateSKKB(outputPath, { sekolah: s, siswaList }) {
     const namaS = (s.nama || '').toUpperCase()
     const fullText = `Adalah benar-benar telah belajar di ${namaS} Menurut catatan kami, selama belajar di ${namaS} yang bersangkutan telah berkelakuan baik dan tidak terlibat dalam penyalahgunaan Narkotika, Psikotropika dan Zat Aditif lainnya.`
     doc.font('Helvetica').fontSize(10.5).fillColor('#000')
-      .text(fullText, ml, y, { width: cw, align: 'justify' })
-    y += doc.heightOfString(fullText, { width: cw, font: 'Helvetica', fontSize: 10.5 }) + 16
+      .text(fullText, ml, y, { width: cw, align: 'justify', lineGap: 4 })
+    y += doc.heightOfString(fullText, { width: cw, font: 'Helvetica', fontSize: 10.5, lineGap: 4 }) + 20
 
     // ════════════════════════════════════════════════════════════════════
     // PENUTUP
     // ════════════════════════════════════════════════════════════════════
     doc.font('Helvetica').fontSize(10.5)
       .text('Demikian surat keterangan ini dibuat dengan sebenarnya, untuk dapat diketahui dan dipergunakan semestinya.',
-            ml, y, { width: cw, align: 'justify' })
+            ml, y, { width: cw, align: 'justify', lineGap: 4 })
     y += 40
 
     // ════════════════════════════════════════════════════════════════════
