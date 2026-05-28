@@ -413,7 +413,7 @@ function registerIPC() {
       const raportSems = semList.filter(s => !s.is_ujian)
       const nilaiData  = getAllNilai()
       const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, totalB = br+bu
-      const filePath = exportExcelAngkatan(outputPath, {
+      const filePath = await exportExcelAngkatan(outputPath, {
         sekolah: seo, angkatan, siswaList, mapelList, semList,
         nilaiData, ujianSemId: ujianSem?.id, raportSemIds: raportSems.map(s=>s.id),
         br, bu, totalB
@@ -741,67 +741,111 @@ function registerIPC() {
   // ── Export Excel per siswa ────────────────────────────────────────────────
   ipcMain.handle('export:excel_siswa', async (_, siswaId) => {
     try {
-      const XLSX = require('xlsx')
+      const ExcelJS = require('exceljs')
       const siswa   = db.prepare('SELECT * FROM siswa WHERE id=?').get(siswaId)
       if (!siswa) return { ok: false, message: 'Siswa tidak ditemukan' }
       const mapels  = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
       const semList = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
       const nilaiRows = db.prepare('SELECT * FROM nilai WHERE siswa_id=?').all(siswaId)
       const getNilai = (mId, sId) => nilaiRows.find(n => n.mapel_id===mId && n.semester_id===sId)
-      const sekolah = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
-      const br = sekolah?.bobot_raport ?? 60, bu = sekolah?.bobot_ujian ?? 40, tb = br+bu
-
+      const seo = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
+      const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, tb = br+bu
       const raportSems = semList.filter(s => !s.is_ujian)
       const ujianSem   = semList.find(s => s.is_ujian)
 
-      // Sheet 1: Biodata
-      const biodataSheet = XLSX.utils.aoa_to_sheet([
-        ['DATA SISWA'],[''],
-        ['Nama Lengkap', siswa.nama],['NISN', siswa.nisn||'-'],['NISM', siswa.nism||'-'],
-        ['Jenis Kelamin', siswa.jk],['Tempat, Tgl Lahir', `${siswa.tempat_lahir||'-'}, ${siswa.tgl_lahir||'-'}`],
-        ['Agama', siswa.agama||'-'],['Kewarganegaraan', siswa.kewarganegaraan||'Indonesia'],
-        ['Kelas', siswa.kelas||'-'],['Tahun Masuk', siswa.tahun_masuk||'-'],
-        ['Asal Sekolah', siswa.asal_sekolah||'-'],['Nama Ayah/Wali', siswa.ortu||'-'],
-        ['Nama Ibu', siswa.nama_ibu||'-'],['No HP Ortu', siswa.no_hp_ortu||'-'],
-        ['Alamat', siswa.alamat||'-'],['No Blanko Ijazah', siswa.blanko||'-'],
-        ['No SKL', siswa.no_skl||'-'],
-      ])
+      const wb = new ExcelJS.Workbook()
+      wb.creator = 'SIM Ijazah'
 
-      // Sheet 2: Nilai
-      const nilaiHeader = ['No','Mata Pelajaran','Kel.']
-      raportSems.forEach(s => nilaiHeader.push(`${s.label} (P)`))
-      if (ujianSem) nilaiHeader.push('Nilai US')
-      nilaiHeader.push('Rata Raport','Nilai Ijazah')
-      const nilaiData = [nilaiHeader]
-      mapels.forEach((m,i) => {
-        const row = [i+1, m.nama, m.kelompok]
+      const C_HDR  = '1E3A5F', C_SUB = 'EBF3FB', C_WHT = 'FFFFFF'
+      const THIN   = { style:'thin', color:{ argb:'FFCCCCCC' } }
+      const THINH  = { style:'thin', color:{ argb:'FF000000' } }
+
+      // ── Sheet 1: Biodata ──────────────────────────────────────────────
+      const ws1 = wb.addWorksheet('Biodata')
+      ws1.columns = [{ width: 22 }, { width: 40 }]
+      const biodataRows = [
+        ['DATA SISWA', ''],
+        ['Nama Lengkap', siswa.nama],
+        ['NISN', siswa.nisn||'-'], ['NISM', siswa.nism||'-'],
+        ['Jenis Kelamin', siswa.jk], ['Tempat, Tgl Lahir', `${siswa.tempat_lahir||'-'}, ${siswa.tgl_lahir||'-'}`],
+        ['Agama', siswa.agama||'-'], ['Kewarganegaraan', siswa.kewarganegaraan||'Indonesia'],
+        ['Kelas', siswa.kelas||'-'], ['Tahun Masuk', siswa.tahun_masuk||'-'],
+        ['Asal Sekolah', siswa.asal_sekolah||'-'],
+        ['Nama Ayah/Wali', siswa.ortu||'-'], ['Nama Ibu', siswa.nama_ibu||'-'],
+        ['No HP Ortu', siswa.no_hp_ortu||'-'], ['Alamat', siswa.alamat||'-'],
+        ['No Blanko Ijazah', siswa.blanko||'-'], ['No Peserta', siswa.no_peserta||'-'],
+      ]
+      biodataRows.forEach((r, i) => {
+        const row = ws1.addRow(r)
+        row.height = 16
+        if (i === 0) {
+          row.getCell(1).font = { bold:true, color:{argb:'FF'+C_WHT}, size:11 }
+          row.getCell(1).fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF'+C_HDR} }
+          ws1.mergeCells(1, 1, 1, 2)
+          row.getCell(1).alignment = { horizontal:'center' }
+        } else {
+          row.getCell(1).font = { bold:true, size:9 }
+          row.getCell(2).font = { size:9 }
+          const bg = i % 2 === 0 ? C_WHT : C_SUB
+          row.eachCell(c => {
+            c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF'+bg} }
+            c.border = { top:THIN, bottom:THIN, left:THIN, right:THIN }
+          })
+        }
+      })
+
+      // ── Sheet 2: Nilai ────────────────────────────────────────────────
+      const ws2 = wb.addWorksheet('Nilai')
+      const hdr = ['No', 'Mata Pelajaran', ...raportSems.map(s=>s.label), 'Nilai US', 'Rata Raport', 'Nilai Ijazah']
+      ws2.columns = [
+        {width:5},{width:35},
+        ...raportSems.map(()=>({width:10})),
+        {width:10},{width:13},{width:13}
+      ]
+      ws2.views = [{ state:'frozen', xSplit:2, ySplit:1 }]
+      const hRow = ws2.addRow(hdr)
+      hRow.height = 28
+      hRow.eachCell(c => {
+        c.font = { bold:true, color:{argb:'FF'+C_WHT}, size:10 }
+        c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF'+C_HDR} }
+        c.alignment = { horizontal:'center', vertical:'middle', wrapText:true }
+        c.border = { top:THINH, bottom:THINH, left:THINH, right:THINH }
+      })
+
+      mapels.forEach((m, i) => {
         const rapVals = []
         raportSems.forEach(s => {
           const n = getNilai(m.id, s.id)
-          const p = n?.nilai_p != null ? parseFloat(n.nilai_p) : null
-          row.push(p??'-')
-          if (p!=null) rapVals.push(p)
+          if (n?.nilai_p != null) rapVals.push(parseFloat(n.nilai_p))
         })
-        const ujN = ujianSem ? getNilai(m.id, ujianSem.id) : null
+        const ujN   = ujianSem ? getNilai(m.id, ujianSem.id) : null
         const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
-        if (ujianSem) row.push(ujVal!=null?parseFloat(ujVal).toFixed(2):'-')
-        const rataRap = rapVals.length===raportSems.length ? rapVals.reduce((a,b)=>a+b,0)/rapVals.length : null
-        const nij = rataRap!=null && ujVal!=null ? (rataRap*br + ujVal*bu)/tb : null
-        row.push(rataRap!=null?rataRap.toFixed(2):'-', nij!=null?nij.toFixed(2):'-')
-        nilaiData.push(row)
+        const rataR = rapVals.length===raportSems.length ? rapVals.reduce((a,b)=>a+b,0)/rapVals.length : null
+        const nij   = rataR!=null && ujVal!=null ? (rataR*br+ujVal*bu)/tb : null
+        const row   = ws2.addRow([
+          i+1, m.nama,
+          ...raportSems.map(s => { const n=getNilai(m.id,s.id); return n?.nilai_p!=null?parseFloat(n.nilai_p):'' }),
+          ujVal!=null?parseFloat(ujVal.toFixed(2)):'',
+          rataR!=null?parseFloat(rataR.toFixed(2)):'',
+          nij!=null?parseFloat(nij.toFixed(2)):''
+        ])
+        row.height = 16
+        const bg = i%2===0 ? C_WHT : C_SUB
+        row.eachCell((c, ci) => {
+          c.font = { size:9 }
+          c.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF'+bg} }
+          c.alignment = { horizontal: ci<=2 ? 'left' : 'center', vertical:'middle' }
+          c.border = { top:THIN, bottom:THIN, left:THIN, right:THIN }
+        })
       })
-      const ws2 = XLSX.utils.aoa_to_sheet(nilaiData)
-      ws2['!cols'] = nilaiHeader.map((_,i) => ({ wch: i===0?5:i===1?32:i===2?6:12 }))
-      ws2['!rows'] = [{ hpt: 22 }]
 
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, biodataSheet, 'Biodata')
-      XLSX.utils.book_append_sheet(wb, ws2, 'Nilai')
-
-      const fname = `Rekap_${siswa.nama.replace(/\s+/g,'_')}.xlsx`
-      const saveResult = await dialog.showSaveDialog({ title: 'Simpan Rekap Siswa', defaultPath: fname, filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
+      const fname = `Rekap_${(siswa.nama||'Siswa').replace(/\s+/g,'_')}.xlsx`
+      const saveResult = await dialog.showSaveDialog({
+        title: 'Simpan Rekap Siswa', defaultPath: fname,
+        filters: [{ name:'Excel', extensions:['xlsx'] }]
+      })
       if (saveResult.canceled) return { ok: false, message: 'Dibatalkan' }
-      XLSX.writeFile(wb, saveResult.filePath)
+      await wb.xlsx.writeFile(saveResult.filePath)
       await shell.openPath(saveResult.filePath)
       return { ok: true }
     } catch (e) { return { ok: false, message: e.message } }
