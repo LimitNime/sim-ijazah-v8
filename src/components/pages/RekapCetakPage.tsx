@@ -101,13 +101,13 @@ export function RekapCetakPage({ showToast }: { showToast: (msg: string, type?: 
 
   // Dokumen yang bisa dipilih angkatan
   const PDF_BTNS: { type: 'skl'|'dkn'|'nilaiIjazah'|'ijazah'|'transkrip'|'sk_kelulusan'|'skkb'; label: string; info: string }[] = [
-    { type: 'skl',          label: 'Cetak SKL',           info: 'Surat Keterangan Lulus per siswa (A4). Nomor SKL dari data masing-masing siswa.' },
+    { type: 'skl',          label: 'Cetak SKL',           info: 'Surat Keterangan Lulus per siswa (F4 portrait). Nomor SKL dari biodata siswa.' },
     { type: 'dkn',          label: 'Cetak DKN',           info: 'Daftar Kumpulan Nilai semua siswa (F4 landscape). Berisi nilai per mapel dan rata-rata Nilai Ijazah.' },
-    { type: 'nilaiIjazah',  label: 'Cetak Nilai Ijazah',  info: 'Lampiran nilai ijazah per siswa (A4). Berisi 4 kolom: Mapel, Rata Rapor, Nilai US, Nilai Ijazah.' },
+    { type: 'nilaiIjazah',  label: 'Cetak Nilai Ijazah',  info: 'Daftar Nilai Ijazah per siswa (F4 portrait). Berisi kolom: Mapel, Rata Rapor, Nilai US, Nilai Ijazah.' },
     { type: 'ijazah',       label: 'Cetak Ijazah',        info: 'Halaman isian ijazah resmi. Gunakan blanko asli dari Kemendikbud/Kemenag sebagai kertas cetak.' },
     { type: 'transkrip',    label: 'Cetak Transkrip Nilai', info: 'Transkrip Nilai resmi per siswa (F4 portrait). Berisi biodata, tabel nilai akhir per mapel, dan TTD kepala sekolah.' },
     { type: 'sk_kelulusan', label: 'Cetak SK Kelulusan',  info: 'Surat Keputusan Kelulusan resmi (F4). Berisi halaman SK + lampiran daftar siswa lulus.' },
-    { type: 'skkb',         label: 'Cetak SKKB',          info: 'Surat Keterangan Kelakuan Baik per siswa (A4). Nomor dari data siswa atau nomor default sekolah.' },
+    { type: 'skkb',         label: 'Cetak SKKB',          info: 'Surat Keterangan Kelakuan Baik per siswa (F4 portrait). Nomor dari Penomoran Surat.' },
   ]
 
   function getAngkatanLabel(type: string) {
