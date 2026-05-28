@@ -710,184 +710,102 @@ function generateDKN(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
 
 
 function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mapelList, semList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
-  const ExcelJS = require('exceljs')
-  const path    = require('path')
-  const wb      = new ExcelJS.Workbook()
-  wb.creator    = 'SIM Ijazah'
-  wb.created    = new Date()
+  const { Workbook } = require('./excel-builder')
+  const path         = require('path')
 
   const raportSems = semList.filter(s => !s.is_ujian)
   const ujianSem   = semList.find(s => s.is_ujian)
-
-  // Warna tema
-  const C_HEADER    = '1E3A5F'  // biru gelap
-  const C_SUBHEADER = '2E6DA4'  // biru sedang
-  const C_ALT       = 'EBF3FB'  // biru muda alternating
-  const C_WHITE     = 'FFFFFF'
-  const C_BORDER    = { style: 'thin', color: { argb: 'FFCCCCCC' } }
-  const C_BORDER_H  = { style: 'thin', color: { argb: 'FF000000' } }
-
-  function styleHeader(cell, text, bold = true) {
-    cell.value = text
-    cell.font  = { bold, color: { argb: 'FF' + C_WHITE }, size: 10, name: 'Calibri' }
-    cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C_HEADER } }
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-    cell.border = { top: C_BORDER_H, bottom: C_BORDER_H, left: C_BORDER_H, right: C_BORDER_H }
-  }
-
-  function styleSubHeader(cell, text) {
-    cell.value = text
-    cell.font  = { bold: true, color: { argb: 'FF' + C_WHITE }, size: 9, name: 'Calibri' }
-    cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + C_SUBHEADER } }
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-    cell.border = { top: C_BORDER_H, bottom: C_BORDER_H, left: C_BORDER, right: C_BORDER }
-  }
-
-  function styleData(cell, value, rowIdx, align = 'center') {
-    cell.value = value
-    const bg = rowIdx % 2 === 0 ? C_WHITE : C_ALT
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + bg } }
-    cell.alignment = { horizontal: align, vertical: 'middle' }
-    cell.font  = { size: 9, name: 'Calibri' }
-    cell.border = { top: C_BORDER, bottom: C_BORDER, left: C_BORDER, right: C_BORDER }
-  }
 
   function getNilai(siswaId, mapelId, semId) {
     return (nilaiData[siswaId] || []).find(n => n.mapel_id === mapelId && n.semester_id === semId)
   }
 
-  // ── Sheet 1: Rekap Nilai ─────────────────────────────────────────────
-  const ws1 = wb.addWorksheet('Rekap Nilai')
-  const h1  = ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama), 'Rata-rata', 'Nilai Ijazah']
-  ws1.getRow(1).height = 40
-  h1.forEach((txt, i) => styleHeader(ws1.getRow(1).getCell(i + 1), txt))
-  ws1.columns = [
-    { width: 5 }, { width: 32 }, { width: 14 },
-    ...mapelList.map(() => ({ width: 11 })),
-    { width: 12 }, { width: 13 },
-  ]
-  ws1.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }]
+  const wb = new Workbook()
+
+  // ── Sheet 1: Rekap Nilai (semua mapel, nilai ijazah per siswa) ───────
+  const ws1 = wb.addSheet('Rekap Nilai')
+  ws1.setColWidths([5, 32, 14, ...mapelList.map(() => 11), 12, 13])
+  ws1.freezePane(1, 3)
+  ws1.addRow(['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama), 'Rata-rata', 'Nilai Ijazah'], 'header', 40)
 
   siswaList.forEach((sw, ri) => {
-    const row = ws1.getRow(ri + 2)
-    row.height = 16
     let jumlah = 0, cnt = 0
-    styleData(row.getCell(1), ri + 1, ri, 'center')
-    styleData(row.getCell(2), sw.nama || '', ri, 'left')
-    styleData(row.getCell(3), sw.nisn || '', ri, 'center')
-    mapelList.forEach((m, mi) => {
-      const raps = raportSems.map(s => getNilai(sw.id, m.id, s.id)?.nilai_p).filter(v => v != null)
-      const raport = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
-      const ujN  = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal = ujN?.nilai_ujian ?? null
-      const nij  = raport != null && ujVal != null ? (raport * br + ujVal * bu) / totalB : null
-      const val  = nij != null ? parseFloat(nij.toFixed(2)) : null
-      styleData(row.getCell(mi + 4), val ?? '', ri, 'center')
-      if (val != null) { jumlah += val; cnt++ }
-    })
-    const avg = cnt > 0 ? parseFloat((jumlah / cnt).toFixed(2)) : ''
-    styleData(row.getCell(mapelList.length + 4), avg, ri, 'center')
-    styleData(row.getCell(mapelList.length + 5), avg, ri, 'center')
-  })
-
-  // ── Sheet 2: Nilai Per Mapel ─────────────────────────────────────────
-  const ws2 = wb.addWorksheet('Nilai Per Mapel')
-  const semLabels = raportSems.map(s => s.label)
-  const h2 = ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Nilai US', 'Rata Raport', 'Nilai Ijazah']
-  ws2.views = [{ state: 'frozen', xSplit: 3, ySplit: 2 }]
-  ws2.getRow(1).height = 18
-  ws2.getRow(2).height = 28
-  styleSubHeader(ws2.getRow(1).getCell(1), 'No')
-  styleSubHeader(ws2.getRow(1).getCell(2), 'Nama Siswa')
-  styleSubHeader(ws2.getRow(1).getCell(3), 'NISN')
-  ws2.columns = [
-    { width: 5 }, { width: 32 }, { width: 14 },
-    ...semLabels.map(() => ({ width: 10 })),
-    { width: 11 }, { width: 13 }, { width: 13 },
-  ]
-
-  mapelList.forEach((m, mi) => {
-    const startCol = 4
-    // Header baris 1: nama mapel di kolom pertama semester
-    const cell = ws2.getRow(1).getCell(startCol + mi * (semLabels.length + 3))
-    // Baris 2: sub-header semester
-    h2.forEach((txt, i) => styleHeader(ws2.getRow(2).getCell(i + 1), txt))
-
-    siswaList.forEach((sw, ri) => {
-      const row = ws2.getRow(ri + 3 + mi * (siswaList.length + 2))
-      // Skip untuk sheet per mapel — buat sheet baru per mapel
-    })
-  })
-
-  // Simplifikasi: satu sheet per mapel dengan siswa sebagai baris
-  // Reset dan buat ulang ws2 lebih sederhana
-  wb.removeWorksheet(ws2.id)
-  mapelList.forEach((m, mi) => {
-    const wsM = wb.addWorksheet(m.nama.slice(0, 31))
-    const hM  = ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Nilai US', 'Rata Raport', 'Nilai Ijazah']
-    wsM.getRow(1).height = 36
-    hM.forEach((txt, i) => styleHeader(wsM.getRow(1).getCell(i + 1), txt))
-    wsM.columns = [
-      { width: 5 }, { width: 32 }, { width: 14 },
-      ...semLabels.map(() => ({ width: 10 })),
-      { width: 11 }, { width: 13 }, { width: 13 },
-    ]
-    wsM.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }]
-
-    siswaList.forEach((sw, ri) => {
-      const row = wsM.getRow(ri + 2)
-      row.height = 16
-      styleData(row.getCell(1), ri + 1, ri)
-      styleData(row.getCell(2), sw.nama || '', ri, 'left')
-      styleData(row.getCell(3), sw.nisn || '', ri, 'center')
-      const rapVals = []
-      raportSems.forEach((sem, si) => {
-        const n = getNilai(sw.id, m.id, sem.id)
-        const v = n?.nilai_p != null ? parseFloat(n.nilai_p) : null
-        styleData(row.getCell(si + 4), v ?? '', ri)
-        if (v != null) rapVals.push(v)
-      })
-      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
-      const rataR = rapVals.length === raportSems.length ? rapVals.reduce((a, b) => a + b, 0) / rapVals.length : null
-      const nij   = rataR != null && ujVal != null ? (rataR * br + ujVal * bu) / totalB : null
-      styleData(row.getCell(raportSems.length + 4), ujVal ?? '', ri)
-      styleData(row.getCell(raportSems.length + 5), rataR != null ? parseFloat(rataR.toFixed(2)) : '', ri)
-      styleData(row.getCell(raportSems.length + 6), nij   != null ? parseFloat(nij.toFixed(2))   : '', ri)
-    })
-  })
-
-  // ── Sheet Nilai Ijazah (Ringkasan) ───────────────────────────────────
-  const wsN = wb.addWorksheet('Nilai Ijazah')
-  const hN  = ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama.slice(0, 20)), 'Rata-rata NIJ']
-  wsN.getRow(1).height = 40
-  hN.forEach((txt, i) => styleHeader(wsN.getRow(1).getCell(i + 1), txt))
-  wsN.columns = [{ width: 5 }, { width: 32 }, { width: 14 }, ...mapelList.map(() => ({ width: 12 })), { width: 14 }]
-  wsN.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }]
-
-  siswaList.forEach((sw, ri) => {
-    const row = wsN.getRow(ri + 2)
-    row.height = 16
-    styleData(row.getCell(1), ri + 1, ri)
-    styleData(row.getCell(2), sw.nama || '', ri, 'left')
-    styleData(row.getCell(3), sw.nisn || '', ri, 'center')
-    let sumNij = 0, cntNij = 0
-    mapelList.forEach((m, mi) => {
+    const mapelVals = mapelList.map(m => {
       const raps = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
       const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
       const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
       const ujVal = ujN?.nilai_ujian ?? null
       const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
-      styleData(row.getCell(mi + 4), nij ?? '', ri)
-      if (nij != null) { sumNij += nij; cntNij++ }
+      if (nij != null) { jumlah += nij; cnt++ }
+      return nij ?? ''
     })
-    const avgNij = cntNij > 0 ? parseFloat((sumNij / cntNij).toFixed(2)) : ''
-    styleData(row.getCell(mapelList.length + 4), avgNij, ri)
+    const avg = cnt > 0 ? parseFloat((jumlah / cnt).toFixed(2)) : ''
+    ws1.addRow(
+      [ri + 1, sw.nama || '', sw.nisn || '', ...mapelVals, avg, avg],
+      ['data_l', 'data_l', 'data', ...mapelList.map(() => 'data'), 'data', 'data'],
+      16, ri
+    )
   })
 
-  const fname = `Nilai_Angkatan_${(angkatan?.nama || 'Semua').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`
+  // ── Sheet per Mata Pelajaran ─────────────────────────────────────────
+  const semLabels = raportSems.map(sem => sem.label)
+  mapelList.forEach(m => {
+    const wsM = wb.addSheet(m.nama.slice(0, 31))
+    wsM.setColWidths([5, 32, 14, ...semLabels.map(() => 10), 11, 13, 13])
+    wsM.freezePane(1, 3)
+    wsM.addRow(
+      ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Nilai US', 'Rata Raport', 'Nilai Ijazah'],
+      'header', 36
+    )
+    siswaList.forEach((sw, ri) => {
+      const rapVals = []
+      const semCells = raportSems.map(sem => {
+        const n = getNilai(sw.id, m.id, sem.id)
+        const v = n?.nilai_p != null ? parseFloat(n.nilai_p) : null
+        if (v != null) rapVals.push(v)
+        return v ?? ''
+      })
+      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
+      const rataR = rapVals.length === raportSems.length ? rapVals.reduce((a, b) => a + b, 0) / rapVals.length : null
+      const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
+      wsM.addRow(
+        [ri + 1, sw.nama || '', sw.nisn || '', ...semCells,
+         ujVal ?? '', rataR != null ? parseFloat(rataR.toFixed(2)) : '', nij ?? ''],
+        ['data_l', 'data_l', 'data', ...semLabels.map(() => 'data'), 'data', 'data', 'data'],
+        16, ri
+      )
+    })
+  })
+
+  // ── Sheet Nilai Ijazah (ringkasan semua mapel) ───────────────────────
+  const wsN = wb.addSheet('Nilai Ijazah')
+  wsN.setColWidths([5, 32, 14, ...mapelList.map(() => 12), 14])
+  wsN.freezePane(1, 3)
+  wsN.addRow(['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama.slice(0, 20)), 'Rata-rata NIJ'], 'header', 40)
+
+  siswaList.forEach((sw, ri) => {
+    let sumNij = 0, cntNij = 0
+    const nijCells = mapelList.map(m => {
+      const raps = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
+      const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
+      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      const ujVal = ujN?.nilai_ujian ?? null
+      const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
+      if (nij != null) { sumNij += nij; cntNij++ }
+      return nij ?? ''
+    })
+    const avgNij = cntNij > 0 ? parseFloat((sumNij / cntNij).toFixed(2)) : ''
+    wsN.addRow(
+      [ri + 1, sw.nama || '', sw.nisn || '', ...nijCells, avgNij],
+      ['data_l', 'data_l', 'data', ...mapelList.map(() => 'data'), 'data'],
+      16, ri
+    )
+  })
+
+  const fname    = `Nilai_Angkatan_${(angkatan?.nama || 'Semua').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`
   const filePath = path.join(outputPath, fname)
-  return wb.xlsx.writeFile(filePath).then(() => filePath)
+  return wb.writeFile(filePath).then(() => filePath)
 }
 
 function generateIjazah(outputPath, { sekolah: s, siswaList }) {
