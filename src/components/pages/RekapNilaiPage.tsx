@@ -95,15 +95,76 @@ export function RekapNilaiPage({ showToast, onNavigate }: {
     setExporting(true)
     try {
       const XLSX = await import('xlsx')
-      const wsData = [
-        ['No','Nama Siswa','NISN','Jumlah Nilai','Nilai Ijazah','Status'],
-        ...filtered.map(r => [r.no_urut, r.nama, r.nisn||'-', r.jml_nilai, r.nilai_ijazah?.toFixed(2)??'-', r.lengkap?'Lengkap':'Belum Lengkap'])
-      ]
+
+      const headers = ['No','Nama Siswa','NISN','Jumlah Nilai','Nilai Ijazah','Status']
+      const rows = filtered.map(r => [
+        r.no_urut, r.nama, r.nisn||'-', r.jml_nilai,
+        r.nilai_ijazah?.toFixed(2)??'-',
+        r.lengkap ? 'Lengkap' : 'Belum Lengkap'
+      ])
+
+      const wsData = [headers, ...rows]
       const ws = (XLSX as any).utils.aoa_to_sheet(wsData)
+
+      // Lebar kolom
       ws['!cols'] = [{wch:6},{wch:32},{wch:16},{wch:12},{wch:14},{wch:16}]
+
+      // Tinggi baris header
+      ws['!rows'] = [{ hpt: 24 }]
+
+      // Style helper
+      const borderThin = {
+        top:    { style: 'thin', color: { rgb: 'CCCCCC' } },
+        bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+        left:   { style: 'thin', color: { rgb: 'CCCCCC' } },
+        right:  { style: 'thin', color: { rgb: 'CCCCCC' } },
+      }
+      const borderHeader = {
+        top:    { style: 'thin', color: { rgb: '000000' } },
+        bottom: { style: 'thin', color: { rgb: '000000' } },
+        left:   { style: 'thin', color: { rgb: '000000' } },
+        right:  { style: 'thin', color: { rgb: '000000' } },
+      }
+
+      const colCount = headers.length
+      const rowCount = wsData.length
+
+      for (let R = 0; R < rowCount; R++) {
+        for (let C = 0; C < colCount; C++) {
+          const addr = (XLSX as any).utils.encode_cell({ r: R, c: C })
+          if (!ws[addr]) ws[addr] = { v: '', t: 's' }
+
+          const isHeader = R === 0
+          const isAlt    = !isHeader && R % 2 === 0
+
+          ws[addr].s = {
+            font: {
+              name: 'Calibri',
+              sz:   isHeader ? 10 : 9,
+              bold: isHeader,
+              color: { rgb: isHeader ? 'FFFFFF' : '000000' },
+            },
+            fill: {
+              patternType: 'solid',
+              fgColor: {
+                rgb: isHeader ? '1E3A5F'
+                   : isAlt   ? 'EBF3FB'
+                   : 'FFFFFF'
+              },
+            },
+            alignment: {
+              horizontal: (C === 1) ? 'left' : 'center',
+              vertical:   'center',
+              wrapText:   isHeader,
+            },
+            border: isHeader ? borderHeader : borderThin,
+          }
+        }
+      }
+
       const wb = (XLSX as any).utils.book_new()
       ;(XLSX as any).utils.book_append_sheet(wb, ws, 'Rekap Nilai')
-      ;(XLSX as any).writeFile(wb, `Rekap_Nilai.xlsx`)
+      ;(XLSX as any).writeFile(wb, `Rekap_Nilai.xlsx`, { cellStyles: true })
       showToast('Export Excel berhasil')
     } catch (e:any) { showToast(`Gagal export: ${e.message}`, 'error') }
     finally { setExporting(false) }
