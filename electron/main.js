@@ -302,6 +302,29 @@ function registerIPC() {
     })
   })
 
+  // ── Export Excel Rekap Nilai (dari main process, bukan renderer) ─────────
+  ipcMain.handle('export:excel_rekap', async (_, rows) => {
+    try {
+      const { Workbook } = require('./excel-builder')
+      const wb = new Workbook()
+      const ws = wb.addSheet('Rekap Nilai')
+      ws.setColWidths([6, 32, 16, 12, 14, 16])
+      ws.addRow(['No', 'Nama Siswa', 'NISN', 'Jumlah Nilai', 'Nilai Ijazah', 'Status'], 'header', 26)
+      rows.forEach((r, i) => {
+        ws.addRow(
+          [r.no_urut || i+1, r.nama, r.nisn||'-', r.jml_nilai, r.nilai_ijazah!=null ? parseFloat(r.nilai_ijazah.toFixed(2)) : '-', r.lengkap ? 'Lengkap' : 'Belum Lengkap'],
+          ['data_l','data_l','data','data','data','data'],
+          16, i
+        )
+      })
+      const result = await dialog.showSaveDialog({ title: 'Simpan Rekap Nilai', defaultPath: 'Rekap_Nilai.xlsx', filters: [{ name:'Excel', extensions:['xlsx'] }] })
+      if (result.canceled) return { ok: false, message: 'Dibatalkan' }
+      await wb.writeFile(result.filePath)
+      await shell.openPath(result.filePath)
+      return { ok: true }
+    } catch (e) { return { ok: false, message: e.message } }
+  })
+
   ipcMain.handle('nilai:rekap_siswa', (_, siswaId) => {
     try {
       const sems    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
@@ -413,11 +436,11 @@ function registerIPC() {
       const raportSems = semList.filter(s => !s.is_ujian)
       const nilaiData  = getAllNilai()
       const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, totalB = br+bu
-      const filePath = await exportExcelAngkatan(outputPath, {
+      const filePath = await Promise.resolve(exportExcelAngkatan(outputPath, {
         sekolah: seo, angkatan, siswaList, mapelList, semList,
         nilaiData, ujianSemId: ujianSem?.id, raportSemIds: raportSems.map(s=>s.id),
         br, bu, totalB
-      })
+      }))
       await shell.openPath(String(filePath))
       return { ok: true, path: String(filePath) }
     } catch (e) { return { ok: false, error: String(e && e.message ? e.message : e) } }
@@ -612,39 +635,17 @@ function registerIPC() {
   // ── Siswa: Download Template Import ──────────────────────────────────────
   ipcMain.handle('siswa:download_template', async () => {
     try {
-      const XLSX = require('xlsx')
+      const { Workbook } = require('./excel-builder')
+      const wb = new Workbook()
+      const ws = wb.addSheet('Template Siswa')
       const headers = ['No','Nama Lengkap','NISN','NISM','Jenis Kelamin','Tempat Lahir','Tanggal Lahir (YYYY-MM-DD)','Agama','Kewarganegaraan','Anak ke-','Kelas','Tahun Masuk','Asal Sekolah','Nama Ayah/Wali','Nama Ibu','No HP Ortu','Alamat','No Peserta Ujian Sekolah','No Peserta AM','No Blanko Ijazah','No SKL','No SKKB','Jenis Kekhususan']
-      const contoh = ['1','Nama Siswa','1234567890','1234/001','Laki-laki','Bandung','2012-01-15','Islam','Indonesia','1','VI A','2019','SDN Contoh','Nama Ayah','Nama Ibu','08123456789','Jl. Contoh No.1','-','-','-','-','-','-']
-      const ws = XLSX.utils.aoa_to_sheet([headers, contoh])
-      ws['!cols'] = headers.map(() => ({ wch: 20 }))
-      ws['!rows'] = [{ hpt: 28 }]
-
-      const borderH = { style: 'thin', color: { rgb: '000000' } }
-      const borderT = { style: 'thin', color: { rgb: 'CCCCCC' } }
-      headers.forEach((_, C) => {
-        const hAddr = XLSX.utils.encode_cell({ r: 0, c: C })
-        const dAddr = XLSX.utils.encode_cell({ r: 1, c: C })
-        if (!ws[hAddr]) ws[hAddr] = { v: '', t: 's' }
-        if (!ws[dAddr]) ws[dAddr] = { v: '', t: 's' }
-        ws[hAddr].s = {
-          font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 10, name: 'Calibri' },
-          fill: { patternType: 'solid', fgColor: { rgb: '1E3A5F' } },
-          alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-          border: { top: borderH, bottom: borderH, left: borderH, right: borderH }
-        }
-        ws[dAddr].s = {
-          font: { sz: 9, name: 'Calibri', color: { rgb: '555555' }, italic: true },
-          fill: { patternType: 'solid', fgColor: { rgb: 'EBF3FB' } },
-          alignment: { horizontal: C === 0 ? 'center' : 'left', vertical: 'center' },
-          border: { top: borderT, bottom: borderT, left: borderT, right: borderT }
-        }
-      })
-
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Template Siswa')
+      const contoh  = ['1','Nama Siswa','1234567890','1234/001','Laki-laki','Bandung','2012-01-15','Islam','Indonesia','1','VI A','2019','SDN Contoh','Nama Ayah','Nama Ibu','08123456789','Jl. Contoh No.1','-','-','-','-','-','-']
+      ws.setColWidths(headers.map(() => 20))
+      ws.addRow(headers, 'header', 30)
+      ws.addRow(contoh,  headers.map(() => 'data_l'), 18, 0)
       const result = await dialog.showSaveDialog({ title: 'Simpan Template Import Siswa', defaultPath: 'template_import_siswa.xlsx', filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
       if (result.canceled) return { ok: false, message: 'Dibatalkan' }
-      XLSX.writeFile(wb, result.filePath, { cellStyles: true })
+      await wb.writeFile(result.filePath)
       return { ok: true }
     } catch (e) { return { ok: false, message: e.message } }
   })
@@ -652,14 +653,21 @@ function registerIPC() {
   // ── Nilai: Download Template Import ──────────────────────────────────────
   ipcMain.handle('nilai:import_template', async () => {
     try {
-      const XLSX = require('xlsx')
+      const { Workbook } = require('./excel-builder')
       const siswaList = db.prepare('SELECT id,no_urut,nisn,nama FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
       const mapelList = db.prepare('SELECT id,nama,kelompok FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
       const semList   = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+      const raportSems = semList.filter(s => !s.is_ujian)
+      const ujianSems  = semList.filter(s => s.is_ujian)
 
-      // Sheet: Petunjuk
-      const petunjukData = [
-        ['TEMPLATE IMPORT NILAI - SIM IJAZAH'],[''],
+      const wb = new Workbook()
+
+      // Sheet 1: Petunjuk
+      const wsPetunjuk = wb.addSheet('Petunjuk')
+      wsPetunjuk.setColWidths([70])
+      const petunjukRows = [
+        ['TEMPLATE IMPORT NILAI - SIM IJAZAH'],
+        [''],
         ['PETUNJUK PENGISIAN:'],
         ['1. Jangan ubah kolom NISN, Nama Siswa, dan Mata Pelajaran'],
         ['2. Untuk semester raport: isi kolom Nilai_P (Nilai Pengetahuan) saja (0-100)'],
@@ -668,72 +676,33 @@ function registerIPC() {
         ['5. Jangan ubah struktur kolom'],
         ['6. Simpan file, lalu import melalui menu Import Nilai'],
       ]
+      petunjukRows.forEach((r, i) => {
+        wsPetunjuk.addRow(r, i === 0 ? 'title' : 'data_l', i === 0 ? 24 : 18, i)
+      })
 
-      // Sheet nilai: baris = 1 siswa × 1 mapel, kolom = identitas + per semester
-      const raportSems = semList.filter(s => !s.is_ujian)
-      const ujianSems  = semList.filter(s => s.is_ujian)
-
+      // Sheet 2: Nilai
       const colHeaders = ['NISN','Nama Siswa','Kode Mapel','Mata Pelajaran','Kelompok']
-      raportSems.forEach(s => { colHeaders.push(`${s.label}__P`) })
-      ujianSems.forEach(s => { colHeaders.push(`${s.label}__Ujian`) })
+      raportSems.forEach(s => colHeaders.push(`${s.label}__P`))
+      ujianSems.forEach(s  => colHeaders.push(`${s.label}__Ujian`))
 
-      const rows = [colHeaders]
+      const wsNilai = wb.addSheet('Nilai')
+      wsNilai.setColWidths(colHeaders.map((_,i) => i < 5 ? 24 : 14))
+      wsNilai.freezePane(1, 2)
+      // Header baris 1: identitas biru gelap, kolom nilai biru sedang
+      wsNilai.addRow(colHeaders, colHeaders.map((_,i) => i < 5 ? 'header' : 'subheader'), 30)
+      // Data rows
       siswaList.forEach(sw => {
-        mapelList.forEach(m => {
-          const row = [sw.nisn||'', sw.nama, m.id, m.nama, m.kelompok]
-          raportSems.forEach(() => { row.push('') })
-          ujianSems.forEach(() => { row.push('') })
-          rows.push(row)
+        mapelList.forEach((m, ri) => {
+          const row = [sw.nisn||'', sw.nama, m.id, m.nama, m.kelompok||'']
+          raportSems.forEach(() => row.push(''))
+          ujianSems.forEach(()  => row.push(''))
+          wsNilai.addRow(row, ['data_l','data_l','data','data_l','data_l', ...raportSems.map(()=>'data'), ...ujianSems.map(()=>'data')], 16, ri)
         })
       })
 
-      const ws1 = XLSX.utils.aoa_to_sheet(petunjukData)
-      const ws2 = XLSX.utils.aoa_to_sheet(rows)
-      ws2['!cols'] = colHeaders.map((_,i) => ({ wch: i < 5 ? 24 : 12 }))
-      ws2['!rows'] = [{ hpt: 28 }]
-
-      const borderH = { style: 'thin', color: { rgb: '000000' } }
-      const borderT = { style: 'thin', color: { rgb: 'CCCCCC' } }
-
-      // Style sheet Petunjuk
-      ws1['!cols'] = [{ wch: 60 }]
-      petunjukData.forEach((_, R) => {
-        const addr = XLSX.utils.encode_cell({ r: R, c: 0 })
-        if (!ws1[addr]) ws1[addr] = { v: '', t: 's' }
-        const isTitle = R === 0
-        ws1[addr].s = {
-          font: { bold: isTitle, sz: isTitle ? 12 : 10, name: 'Calibri', color: { rgb: isTitle ? 'FFFFFF' : '333333' } },
-          fill: { patternType: 'solid', fgColor: { rgb: isTitle ? '1E3A5F' : R % 2 === 0 ? 'FFFFFF' : 'F5F9FF' } },
-          alignment: { horizontal: 'left', vertical: 'center' },
-        }
-      })
-
-      // Style sheet Nilai — header + data rows
-      const totalCols = colHeaders.length
-      const totalRows = rows.length
-      for (let R = 0; R < totalRows; R++) {
-        for (let C = 0; C < totalCols; C++) {
-          const addr = XLSX.utils.encode_cell({ r: R, c: C })
-          if (!ws2[addr]) ws2[addr] = { v: '', t: 's' }
-          const isHeader = R === 0
-          const isAlt    = !isHeader && R % 2 === 0
-          const isNilaiCol = C >= 5
-          ws2[addr].s = {
-            font: { bold: isHeader, sz: isHeader ? 10 : 9, name: 'Calibri', color: { rgb: isHeader ? 'FFFFFF' : '000000' } },
-            fill: { patternType: 'solid', fgColor: { rgb: isHeader ? (isNilaiCol ? '2E6DA4' : '1E3A5F') : isAlt ? 'EBF3FB' : 'FFFFFF' } },
-            alignment: { horizontal: isHeader ? 'center' : C < 2 ? 'left' : 'center', vertical: 'center', wrapText: isHeader },
-            border: { top: isHeader ? borderH : borderT, bottom: isHeader ? borderH : borderT, left: isHeader ? borderH : borderT, right: isHeader ? borderH : borderT }
-          }
-        }
-      }
-
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws1, 'Petunjuk')
-      XLSX.utils.book_append_sheet(wb, ws2, 'Nilai')
-
       const result = await dialog.showSaveDialog({ title: 'Simpan Template Import Nilai', defaultPath: 'template_import_nilai.xlsx', filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
       if (result.canceled) return { ok: false, message: 'Dibatalkan' }
-      XLSX.writeFile(wb, result.filePath, { cellStyles: true })
+      await wb.writeFile(result.filePath)
       return { ok: true }
     } catch (e) { return { ok: false, message: e.message } }
   })
