@@ -94,7 +94,7 @@ export function RekapNilaiPage({ showToast, onNavigate }: {
   const handleExportSemua = async () => {
     setExporting(true)
     try {
-      const result = await exportApi.excelRekap(filtered) as any
+      const result = await exportApi.excelRekap() as any
       if (result?.ok) showToast('Export Excel berhasil')
       else showToast(result?.message || 'Gagal export', 'error')
     } catch (e:any) { showToast(`Gagal export: ${e.message}`, 'error') }
