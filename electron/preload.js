@@ -1,5 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron')
-const invoke = (ch, ...a) => ipcRenderer.invoke(ch, ...a)
+// Wrap invoke agar error IPC tidak throw DOMException ke renderer
+// Selalu return { ok: false, error: msg } jika IPC gagal
+const invoke = async (ch, ...a) => {
+  try {
+    return await ipcRenderer.invoke(ch, ...a)
+  } catch (e) {
+    // IPC error (structured clone, handler crash, dll) - kembalikan plain error object
+    return { ok: false, error: String(e && e.message ? e.message : e), _ipc_error: true }
+  }
+}
 
 contextBridge.exposeInMainWorld('api', {
   auth:     { login: (e,p) => invoke('auth:login',e,p) },
@@ -42,6 +51,8 @@ contextBridge.exposeInMainWorld('api', {
     getSiswa:       id   => invoke('nilai:get_siswa',id),
     saveBatch:      rows => invoke('nilai:save_batch',rows),
     rekap:          ()   => invoke('nilai:rekap'),
+    rekapSiswa:     id   => invoke('nilai:rekap_siswa',id),
+    rekapAngkatan:  id   => invoke('nilai:rekap_angkatan',id),
     importTemplate: ()   => invoke('nilai:import_template'),
     importNilai:    ()   => invoke('nilai:import_nilai'),
   },
