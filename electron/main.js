@@ -167,6 +167,12 @@ function getAllNilai() {
 }
 
 // ── IPC ────────────────────────────────────────────────────────────────────
+// Helper: pastikan return value bisa di-clone lewat IPC (plain JSON)
+function safeReturn(val) {
+  try { return JSON.parse(JSON.stringify(val)) } 
+  catch { return { ok: false, error: 'Internal error: response not serializable' } }
+}
+
 function registerIPC() {
   const crypto = require('crypto')
   const hash = pw => crypto.createHash('sha256').update(pw).digest('hex')
@@ -249,56 +255,64 @@ function registerIPC() {
     tx(rows); return true
   })
   ipcMain.handle('nilai:rekap', () => {
-    const siswa    = db.prepare('SELECT id,no_urut,nama,nisn FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
-    const mapels   = db.prepare('SELECT id FROM mapel').all()
-    const s        = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
-    const semList  = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
-    const ujianSem = semList.find(s => s.is_ujian)
+    const siswa      = db.prepare('SELECT id,no_urut,nama,nisn FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    const mapels     = db.prepare('SELECT id FROM mapel').all()
+    const s          = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
+    const semList    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+    const ujianSem   = semList.find(s => s.is_ujian)
     const raportSems = semList.filter(s => !s.is_ujian)
     if (!s || s.bobot_raport == null || s.bobot_ujian == null || (s.bobot_raport + s.bobot_ujian) === 0) {
       return { error: 'Bobot nilai belum dikonfigurasi. Silakan atur bobot di menu Data Sekolah.' }
     }
     const br = s.bobot_raport, bu = s.bobot_ujian, tb = br + bu
+    const mapelIds   = mapels.map(m => m.id)
+    const totalMapel = mapelIds.length
+
+    // Satu query ambil SEMUA nilai sekaligus
+    const allNilai = db.prepare('SELECT siswa_id,mapel_id,semester_id,nilai_p,nilai_ujian FROM nilai').all()
+    // Index: nilaiIdx[siswa_id][mapel_id][semester_id]
+    const nilaiIdx = {}
+    for (const n of allNilai) {
+      if (!nilaiIdx[n.siswa_id]) nilaiIdx[n.siswa_id] = {}
+      if (!nilaiIdx[n.siswa_id][n.mapel_id]) nilaiIdx[n.siswa_id][n.mapel_id] = {}
+      nilaiIdx[n.siswa_id][n.mapel_id][n.semester_id] = n
+    }
+    // Hitung jumlah nilai per siswa dari allNilai
+    const jmlMap = {}
+    for (const n of allNilai) { jmlMap[n.siswa_id] = (jmlMap[n.siswa_id] || 0) + 1 }
 
     return siswa.map(sw => {
-      // Cek kelengkapan per semester
-      const detail_kelengkapan = semList.map(sem => {
-        if (sem.is_ujian) {
-          // Cek ujian: semua mapel harus ada nilai_ujian
-          const missing = mapels.filter(m => {
-            const n = db.prepare('SELECT nilai_ujian FROM nilai WHERE siswa_id=? AND mapel_id=? AND semester_id=?').get(sw.id, m.id, sem.id)
-            return !n || n.nilai_ujian == null
-          })
-          return { semester_id: sem.id, label: sem.label, lengkap: missing.length === 0, kurang: missing.length }
-        } else {
-          // Cek raport: semua mapel harus ada nilai_p dan nilai_k
-          const missing = mapels.filter(m => {
-            const n = db.prepare('SELECT nilai_p FROM nilai WHERE siswa_id=? AND mapel_id=? AND semester_id=?').get(sw.id, m.id, sem.id)
-            return !n || n.nilai_p == null
-          })
-          return { semester_id: sem.id, label: sem.label, lengkap: missing.length === 0, kurang: missing.length }
-        }
-      })
+      const swNilai = nilaiIdx[sw.id] || {}
 
+      // Cek kelengkapan per semester (batch)
+      const detail_kelengkapan = semList.map(sem => {
+        let kurang = 0
+        for (const m of mapels) {
+          const n = (swNilai[m.id] || {})[sem.id]
+          if (sem.is_ujian) { if (!n || n.nilai_ujian == null) kurang++ }
+          else              { if (!n || n.nilai_p == null) kurang++ }
+        }
+        return { semester_id: sem.id, label: sem.label, lengkap: kurang === 0, kurang }
+      })
       const semua_lengkap = detail_kelengkapan.every(d => d.lengkap)
 
-      // Hitung nilai ijazah per mapel lalu rata-rata
+      // Hitung nilai ijazah (batch)
       let sum = 0, cnt = 0
-      for (const m of mapels) {
+      for (const mid of mapelIds) {
+        const mNilai = swNilai[mid] || {}
         const raps = raportSems.map(sem => {
-          const n = db.prepare('SELECT nilai_p FROM nilai WHERE siswa_id=? AND mapel_id=? AND semester_id=?').get(sw.id, m.id, sem.id)
+          const n = mNilai[sem.id]
           return n && n.nilai_p != null ? parseFloat(n.nilai_p) : null
         })
         if (raps.some(v => v === null)) continue
         const raport = raps.reduce((a,b)=>a+b,0)/raps.length
-        const us = ujianSem ? db.prepare('SELECT nilai_ujian FROM nilai WHERE siswa_id=? AND mapel_id=? AND semester_id=?').get(sw.id, m.id, ujianSem.id) : null
-        if (!us || us.nilai_ujian == null) continue
-        sum += (raport*br + parseFloat(us.nilai_ujian)*bu)/tb
+        const usN = ujianSem ? mNilai[ujianSem.id] : null
+        if (!usN || usN.nilai_ujian == null) continue
+        sum += (raport*br + parseFloat(usN.nilai_ujian)*bu)/tb
         cnt++
       }
-      const nij = semua_lengkap && cnt === mapels.length ? Math.round(sum/cnt*100)/100 : null
-      const jml = db.prepare('SELECT COUNT(*) c FROM nilai WHERE siswa_id=?').get(sw.id).c
-      return { ...sw, nilai_ijazah: nij, jml_nilai: jml, lengkap: semua_lengkap, detail_kelengkapan }
+      const nij = semua_lengkap && cnt === totalMapel && totalMapel > 0 ? Math.round(sum/cnt*100)/100 : null
+      return { ...sw, nilai_ijazah: nij, jml_nilai: jmlMap[sw.id] || 0, lengkap: semua_lengkap, detail_kelengkapan }
     })
   })
 
@@ -351,8 +365,8 @@ function registerIPC() {
       if (result.canceled) return { ok: false, message: 'Dibatalkan' }
       await wb.writeFile(result.filePath)
       shell.openPath(result.filePath)
-      return { ok: true }
-    } catch (e) { return { ok: false, message: String(e instanceof Error ? e.message : e) } }
+      return safeReturn({ ok: true })
+    } catch (e) { return safeReturn({ ok: false, message: String(e instanceof Error ? e.message : e) }) }
   })
 
   ipcMain.handle('nilai:rekap_siswa', (_, siswaId) => {
@@ -476,10 +490,9 @@ function registerIPC() {
       })
       // Step 4: open file
       shell.openPath(String(filePath))
-      // Step 5: return plain object
-      return { ok: true }
+      return safeReturn({ ok: true })
     } catch (e) {
-      return { ok: false, error: String(e instanceof Error ? e.message : e) }
+      return safeReturn({ ok: false, error: String(e instanceof Error ? e.message : e) })
     }
   })
 
@@ -908,8 +921,8 @@ function registerIPC() {
       if (saveResult.canceled) return { ok: false, message: 'Dibatalkan' }
       await wb.writeFile(saveResult.filePath)
       shell.openPath(saveResult.filePath)
-      return { ok: true }
-    } catch (e) { return { ok: false, message: String(e instanceof Error ? e.message : e) } }
+      return safeReturn({ ok: true })
+    } catch (e) { return safeReturn({ ok: false, message: String(e instanceof Error ? e.message : e) }) }
   })
 
   // ── PDF per siswa ─────────────────────────────────────────────────────────
