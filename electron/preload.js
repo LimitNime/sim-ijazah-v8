@@ -62,7 +62,7 @@ contextBridge.exposeInMainWorld('api', {
   export: {
     excelAngkatan: angkatan_id => invoke('export:excel_angkatan', angkatan_id),
     excelSiswa:    siswa_id    => invoke('export:excel_siswa', siswa_id),
-    excelRekap:    rows        => invoke('export:excel_rekap', rows),
+    excelRekap:    ()          => invoke('export:excel_rekap'),
   },
   pdf: {
     skl:             angkatan_id => invoke('pdf:skl', angkatan_id),
