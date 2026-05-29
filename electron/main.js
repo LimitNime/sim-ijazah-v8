@@ -302,27 +302,57 @@ function registerIPC() {
     })
   })
 
-  // ── Export Excel Rekap Nilai (dari main process, bukan renderer) ─────────
-  ipcMain.handle('export:excel_rekap', async (_, rows) => {
+  // ── Export Excel Rekap Nilai — main process ambil langsung dari DB ────────
+  ipcMain.handle('export:excel_rekap', async () => {
     try {
       const { Workbook } = require('./excel-builder')
+
+      // Ambil data langsung dari DB (tidak ada IPC serialization issue)
+      const siswa    = db.prepare('SELECT id,no_urut,nama,nisn FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      const mapels   = db.prepare('SELECT id FROM mapel').all()
+      const seo      = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
+      const semList  = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+      const ujianSem = semList.find(s => s.is_ujian)
+      const raportSems = semList.filter(s => !s.is_ujian)
+      const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, tb = br + bu
+
+      const rows = siswa.map((sw, i) => {
+        let sum = 0, cnt = 0, allOk = true
+        for (const m of mapels) {
+          const raps = raportSems.map(sem => {
+            const n = db.prepare('SELECT nilai_p FROM nilai WHERE siswa_id=? AND mapel_id=? AND semester_id=?').get(sw.id, m.id, sem.id)
+            return n && n.nilai_p != null ? parseFloat(n.nilai_p) : null
+          })
+          if (raps.some(v => v === null)) { allOk = false; continue }
+          const raport = raps.reduce((a,b)=>a+b,0)/raps.length
+          const us = ujianSem ? db.prepare('SELECT nilai_ujian FROM nilai WHERE siswa_id=? AND mapel_id=? AND semester_id=?').get(sw.id, m.id, ujianSem.id) : null
+          if (!us || us.nilai_ujian == null) { allOk = false; continue }
+          sum += (raport*br + parseFloat(us.nilai_ujian)*bu)/tb
+          cnt++
+        }
+        const nij = allOk && cnt === mapels.length && cnt > 0 ? parseFloat((sum/cnt).toFixed(2)) : null
+        const jml = db.prepare('SELECT COUNT(*) c FROM nilai WHERE siswa_id=?').get(sw.id).c
+        return { idx: i+1, nama: sw.nama||'', nisn: sw.nisn||'-', jml, nij, lengkap: allOk && cnt===mapels.length }
+      })
+
       const wb = new Workbook()
       const ws = wb.addSheet('Rekap Nilai')
       ws.setColWidths([6, 32, 16, 12, 14, 16])
       ws.addRow(['No', 'Nama Siswa', 'NISN', 'Jumlah Nilai', 'Nilai Ijazah', 'Status'], 'header', 26)
       rows.forEach((r, i) => {
         ws.addRow(
-          [r.no_urut || i+1, r.nama, r.nisn||'-', r.jml_nilai, r.nilai_ijazah!=null ? parseFloat(r.nilai_ijazah.toFixed(2)) : '-', r.lengkap ? 'Lengkap' : 'Belum Lengkap'],
+          [r.idx, r.nama, r.nisn, r.jml, r.nij ?? '-', r.lengkap ? 'Lengkap' : 'Belum Lengkap'],
           ['data_l','data_l','data','data','data','data'],
           16, i
         )
       })
+
       const result = await dialog.showSaveDialog({ title: 'Simpan Rekap Nilai', defaultPath: 'Rekap_Nilai.xlsx', filters: [{ name:'Excel', extensions:['xlsx'] }] })
       if (result.canceled) return { ok: false, message: 'Dibatalkan' }
       await wb.writeFile(result.filePath)
-      await shell.openPath(result.filePath)
+      shell.openPath(result.filePath)
       return { ok: true }
-    } catch (e) { return { ok: false, message: e.message } }
+    } catch (e) { return { ok: false, message: String(e instanceof Error ? e.message : e) } }
   })
 
   ipcMain.handle('nilai:rekap_siswa', (_, siswaId) => {
@@ -424,10 +454,12 @@ function registerIPC() {
 
   ipcMain.handle('export:excel_angkatan', async (_, angkatan_id) => {
     try {
+      // Step 1: load module
       const { exportExcelAngkatan } = require('./pdf-generator')
+      // Step 2: query DB
       const angkatan  = angkatan_id ? db.prepare('SELECT * FROM angkatan WHERE id=?').get(angkatan_id) : null
       const siswaList = angkatan_id
-        ? db.prepare(`SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama`).all(angkatan_id)
+        ? db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(angkatan_id)
         : db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
       const mapelList = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
       const semList   = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
@@ -436,14 +468,19 @@ function registerIPC() {
       const raportSems = semList.filter(s => !s.is_ujian)
       const nilaiData  = getAllNilai()
       const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, totalB = br+bu
-      const filePath = await Promise.resolve(exportExcelAngkatan(outputPath, {
+      // Step 3: generate file
+      const filePath = await exportExcelAngkatan(outputPath, {
         sekolah: seo, angkatan, siswaList, mapelList, semList,
         nilaiData, ujianSemId: ujianSem?.id, raportSemIds: raportSems.map(s=>s.id),
         br, bu, totalB
-      }))
-      await shell.openPath(String(filePath))
-      return { ok: true, path: String(filePath) }
-    } catch (e) { return { ok: false, error: String(e && e.message ? e.message : e) } }
+      })
+      // Step 4: open file
+      shell.openPath(String(filePath))
+      // Step 5: return plain object
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: String(e instanceof Error ? e.message : e) }
+    }
   })
 
   ipcMain.handle('pdf:nilai_ijazah', async (_, angkatan_id) => {
@@ -598,29 +635,61 @@ function registerIPC() {
         }
         return ''
       }
-      const stmt = db.prepare('INSERT INTO siswa(no_urut,nism,nisn,nama,jk,tempat_lahir,tgl_lahir,ortu,peserta_am,blanko,no_skl,no_peserta,alamat,no_skkb,jenis_kekhususan) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      const stmtInsert = db.prepare(`INSERT INTO siswa(
+        no_urut,nism,nisn,nama,jk,tempat_lahir,tgl_lahir,
+        ortu,nama_ibu,agama,kewarganegaraan,anak_ke,
+        asal_sekolah,tahun_masuk,kelas,no_hp_ortu,alamat,
+        peserta_am,no_peserta,blanko,no_skl,no_skkb,jenis_kekhususan
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      const stmtUpdate = db.prepare(`UPDATE siswa SET
+        no_urut=?,nism=?,nama=?,jk=?,tempat_lahir=?,tgl_lahir=?,
+        ortu=?,nama_ibu=?,agama=?,kewarganegaraan=?,anak_ke=?,
+        asal_sekolah=?,tahun_masuk=?,kelas=?,no_hp_ortu=?,alamat=?,
+        peserta_am=?,no_peserta=?,blanko=?,no_skl=?,no_skkb=?,jenis_kekhususan=?
+        WHERE nisn=?`)
+      const stmtFind = db.prepare('SELECT id FROM siswa WHERE nisn=?')
       let imported = 0, skipped = 0
       const tx = db.transaction(() => {
         normalizedRows.forEach((row, i) => {
           const nama = mapField(row,'nama','nama_lengkap','name')
           if (!nama) { skipped++; return }
-          const no = parseInt(mapField(row,'no','no_urut','nomor')) || (i + 1)
-          const jk = /^p/i.test(mapField(row,'jk','jenis_kelamin','gender')) ? 'Perempuan' : 'Laki-laki'
-          stmt.run(no,
-            mapField(row,'nism','nis','no_induk'),
-            mapField(row,'nisn'),
-            nama, jk,
-            mapField(row,'tempat_lahir','tempat'),
-            mapField(row,'tgl_lahir','tanggal_lahir'),
-            mapField(row,'ortu','nama_ortu','orang_tua'),
-            mapField(row,'peserta_am','no_peserta_am'),
-            mapField(row,'blanko','no_blanko'),
-            mapField(row,'no_skl','nomor_skl'),
-            mapField(row,'no_peserta'),
-            mapField(row,'alamat'),
-            mapField(row,'no_skkb'),
-            mapField(row,'jenis_kekhususan')
-          )
+          const no    = parseInt(mapField(row,'no','no_urut','nomor')) || (i + 1)
+          const nisn  = mapField(row,'nisn') || null
+          const jkRaw = mapField(row,'jenis_kelamin','jk','gender')
+          const jk    = /^p/i.test(jkRaw) ? 'Perempuan' : 'Laki-laki'
+          const vals = [
+            no,
+            mapField(row,'nism','nis','no_induk','no_nism') || null,
+            nisn, nama, jk,
+            mapField(row,'tempat_lahir','tempat_lahir_(yyyy-mm-dd)','tempat') || null,
+            mapField(row,'tanggal_lahir_(yyyy-mm-dd)','tgl_lahir','tanggal_lahir') || null,
+            mapField(row,'nama_ayah/wali','nama_ayah_wali','ortu','nama_ortu','orang_tua') || null,
+            mapField(row,'nama_ibu') || null,
+            mapField(row,'agama') || 'Islam',
+            mapField(row,'kewarganegaraan') || 'Indonesia',
+            mapField(row,'anak_ke-','anak_ke') || null,
+            mapField(row,'asal_sekolah') || null,
+            mapField(row,'tahun_masuk') || null,
+            mapField(row,'kelas') || null,
+            mapField(row,'no_hp_ortu','no_hp') || null,
+            mapField(row,'alamat') || null,
+            mapField(row,'no_peserta_am','peserta_am','no_peserta_am') || null,
+            mapField(row,'no_peserta_ujian_sekolah','no_peserta') || null,
+            mapField(row,'no_blanko_ijazah','blanko','no_blanko') || null,
+            mapField(row,'no_skl','nomor_skl') || null,
+            mapField(row,'no_skkb') || null,
+            mapField(row,'jenis_kekhususan') || null
+          ]
+          // Kalau NISN ada dan sudah exist -> UPDATE, kalau tidak -> INSERT baru
+          const existing = nisn ? stmtFind.get(nisn) : null
+          if (existing) {
+            // UPDATE: skip no_urut & nism & nisn (sudah di index 0,1,2), append id di akhir
+            stmtUpdate.run(vals[0],vals[1],vals[3],vals[4],vals[5],vals[6],vals[7],vals[8],
+              vals[9],vals[10],vals[11],vals[12],vals[13],vals[14],vals[15],vals[16],
+              vals[17],vals[18],vals[19],vals[20],vals[21],vals[22], nisn)
+          } else {
+            stmtInsert.run(...vals)
+          }
           imported++
         })
       })
@@ -738,14 +807,9 @@ function registerIPC() {
           const nisn    = String(row['NISN']||'').trim()
           const namaSiswa = String(row['Nama Siswa']||'').trim()
           const mapelId = parseInt(row['Kode Mapel'])
-          let siswaId = siswaMap[nisn] || siswaMapNama[namaSiswa.toLowerCase()]
-          // Jika siswa belum ada di DB, tambahkan otomatis
-          if (!siswaId && nisn && namaSiswa) {
-            const inserted = db.prepare('INSERT INTO siswa(nisn,nama) VALUES(?,?)').run(nisn, namaSiswa)
-            siswaId = inserted.lastInsertRowid
-            siswaMap[nisn] = siswaId
-            siswaMapNama[namaSiswa.toLowerCase()] = siswaId
-          }
+          // Cari siswa by NISN dulu, fallback by nama
+          let siswaId = (nisn ? siswaMap[nisn] : null) || siswaMapNama[namaSiswa.toLowerCase()]
+          // Jika tidak ditemukan, skip (jangan auto-insert)
           if (!siswaId || !mapelId) { skipped++; return }
 
           raportSems.forEach(sem => {
@@ -843,9 +907,9 @@ function registerIPC() {
       })
       if (saveResult.canceled) return { ok: false, message: 'Dibatalkan' }
       await wb.writeFile(saveResult.filePath)
-      await shell.openPath(saveResult.filePath)
+      shell.openPath(saveResult.filePath)
       return { ok: true }
-    } catch (e) { return { ok: false, message: e.message } }
+    } catch (e) { return { ok: false, message: String(e instanceof Error ? e.message : e) } }
   })
 
   // ── PDF per siswa ─────────────────────────────────────────────────────────
