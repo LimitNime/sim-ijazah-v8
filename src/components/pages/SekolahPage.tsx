@@ -334,6 +334,37 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
           </div>
         </div>
       </SectionCard>
+
+      {/* Margin PDF */}
+      <SectionCard title="Margin Dokumen PDF">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+            Satuan: <strong>pt</strong> (1 cm ≈ 28.3 pt). Default kiri/kanan = 45pt (~1.6cm), atas = 18pt (~0.6cm).
+            Berlaku untuk semua dokumen PDF (SKL, DKN, Nilai Ijazah, dll).
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {([
+              { key: 'pdf_margin_left',   label: 'Margin Kiri (pt)',  default: 45 },
+              { key: 'pdf_margin_right',  label: 'Margin Kanan (pt)', default: 45 },
+              { key: 'pdf_margin_top',    label: 'Margin Atas (pt)',  default: 18 },
+              { key: 'pdf_margin_bottom', label: 'Margin Bawah (pt)', default: 20 },
+            ] as const).map(({ key, label, default: def }) => (
+              <div key={key} className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+                <input type="number" min="0" max="200" step="1"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  value={(form as any)[key] ?? def}
+                  onChange={e => set(key as any, parseFloat(e.target.value))}
+                />
+                <p className="text-xs text-gray-400">Default: {def}pt</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button icon={<Save className="w-4 h-4"/>} loading={saving} onClick={save}>Simpan</Button>
+          </div>
+        </div>
+      </SectionCard>
     </div>
   )
 }
