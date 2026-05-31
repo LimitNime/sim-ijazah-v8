@@ -14,6 +14,7 @@ import { RekapNilaiPage } from './components/pages/RekapNilaiPage'
 import { ImportNilaiPage } from './components/pages/ImportNilaiPage'
 import { PenomoranSuratPage } from './components/pages/PenomoranSuratPage'
 import { AngkatanPage } from './components/pages/AngkatanPage'
+import { RankingPage } from './components/pages/RankingPage'
 import { ToastContainer } from './components/ui'
 
 function AppInner() {
@@ -45,11 +46,12 @@ function AppInner() {
       case 'mapel':        return <MapelPage showToast={show} />
       case 'semester':     return <SemesterPage showToast={show} />
       case 'nilai':        return <InputNilaiPage showToast={show} initialSiswaId={pageParams?.siswaId} />
-      case 'rekap-nilai':  return <RekapNilaiPage showToast={show} onNavigate={navigate} />
+      case 'rekap-nilai':  return <RekapNilaiPage showToast={show} onNavigate={(p, params) => navigate(p as any, params)} />
       case 'import-nilai': return <ImportNilaiPage showToast={show} />
       case 'penomoran-surat': return <PenomoranSuratPage showToast={show} />
       case 'rekap-cetak':  return <RekapCetakPage showToast={show} />
       case 'angkatan':     return <AngkatanPage showToast={show} />
+      case 'ranking':      return <RankingPage showToast={show} />
       default: return null
     }
   }
