@@ -5,6 +5,121 @@
 const path = require('path')
 const fs   = require('fs')
 
+// ── Font system ────────────────────────────────────────────────────────────
+// Mendukung font dari: bundled assets, Windows Fonts, atau fallback Helvetica
+// kop_font_family: key dari FONT_CATALOG di bawah, atau null = Helvetica
+
+const FONT_CATALOG = {
+  // ── Bundled (selalu tersedia) ──────────────────────────────────────────
+  'Times New Roman': {
+    regular:    { asset: 'LiberationSerif-Regular.ttf' },
+    bold:       { asset: 'LiberationSerif-Bold.ttf' },
+    italic:     { asset: 'LiberationSerif-Italic.ttf' },
+    bolditalic: { asset: 'LiberationSerif-BoldItalic.ttf' },
+  },
+  'Arial': {
+    regular:    { asset: 'LiberationSans-Regular.ttf' },
+    bold:       { asset: 'LiberationSans-Bold.ttf' },
+    italic:     { asset: 'LiberationSans-Italic.ttf' },
+    bolditalic: { asset: 'LiberationSans-BoldItalic.ttf' },
+  },
+  // ── Windows Fonts (tersedia di Windows) ───────────────────────────────
+  'Calibri':     { winFile: 'calibri',     styles: { bold:'b', italic:'i', bolditalic:'z' } },
+  'Cambria':     { winFile: 'cambria',     styles: { bold:'b', italic:'i', bolditalic:'z' } },
+  'Georgia':     { winFile: 'georgia',     styles: { bold:'b', italic:'i', bolditalic:'z' } },
+  'Verdana':     { winFile: 'verdana',     styles: { bold:'b', italic:'i', bolditalic:'z' } },
+  'Tahoma':      { winFile: 'tahoma',      styles: { bold:'bd' } },
+  'Book Antiqua':{ winFile: 'bookos',      styles: { bold:'b', italic:'i', bolditalic:'z' } },
+  'Palatino':    { winFile: 'pala',        styles: { bold:'b', italic:'i', bolditalic:'z' } },
+}
+
+// Cache untuk avoid re-register
+const _fontCache = {}
+
+function _getWinFontPath(winFile, suffix) {
+  const winDir = 'C:\Windows\Fonts'
+  const candidates = [
+    path.join(winDir, `${winFile}${suffix || ''}.ttf`),
+    path.join(winDir, `${winFile}.ttf`),
+  ]
+  for (const p of candidates) {
+    try { if (fs.existsSync(p)) return p } catch {}
+  }
+  return null
+}
+
+function _getAssetFontPath(assetFile) {
+  const dir = path.join(path.dirname(__filename), 'assets')
+  const p = path.join(dir, assetFile)
+  try { if (fs.existsSync(p)) return p } catch {}
+  return null
+}
+
+// Register semua style dari 1 family ke PDFKit, return key prefix atau null
+function registerFonts(doc, familyName) {
+  if (!familyName || familyName === 'Helvetica') return null
+  if (_fontCache[familyName]) return _fontCache[familyName]
+
+  const cat = FONT_CATALOG[familyName]
+  if (!cat) { _fontCache[familyName] = null; return null }
+
+  const key = familyName.replace(/\s+/g, '_')
+  const styles = ['regular','bold','italic','bolditalic']
+  let registered = 0
+
+  for (const style of styles) {
+    const fontKey = `${key}-${style}`
+    let filePath = null
+
+    // Coba dari asset bundled dulu
+    if (cat[style]?.asset) {
+      filePath = _getAssetFontPath(cat[style].asset)
+    }
+    // Kalau tidak ada, coba dari Windows Fonts
+    if (!filePath && cat.winFile) {
+      const suffix = style === 'regular' ? '' :
+                     style === 'bold'       ? (cat.styles?.bold       || 'b') :
+                     style === 'italic'     ? (cat.styles?.italic     || 'i') :
+                     style === 'bolditalic' ? (cat.styles?.bolditalic || 'z') : ''
+      filePath = _getWinFontPath(cat.winFile, suffix)
+      // Fallback: kalau bolditalic tidak ada, pakai bold
+      if (!filePath && style === 'bolditalic') {
+        const boldSuffix = cat.styles?.bold || 'b'
+        filePath = _getWinFontPath(cat.winFile, boldSuffix)
+      }
+      // Fallback: kalau italic tidak ada, pakai regular
+      if (!filePath && (style === 'italic' || style === 'bolditalic')) {
+        filePath = _getWinFontPath(cat.winFile, '')
+      }
+    }
+
+    if (filePath) {
+      try { doc.registerFont(fontKey, filePath); registered++ }
+      catch {}
+    }
+  }
+
+  const result = registered > 0 ? key : null
+  _fontCache[familyName] = result
+  return result
+}
+
+// Ambil nama font PDFKit yang siap dipakai
+function getFont(familyKey, style) {
+  // style: 'regular' | 'bold' | 'italic' | 'bolditalic'
+  const builtin = {
+    regular:'Helvetica', bold:'Helvetica-Bold',
+    italic:'Helvetica-Oblique', bolditalic:'Helvetica-BoldOblique'
+  }
+  if (!familyKey) return builtin[style] || 'Helvetica'
+  const fontKey = `${familyKey}-${style}`
+  // Validasi dengan mencoba pakai — PDFKit akan error kalau belum diregister
+  return fontKey
+}
+
+// Daftar font yang bisa dipilih user (untuk dropdown di SekolahPage)
+const FONT_LIST = Object.keys(FONT_CATALOG)
+
 function fmtTgl(tgl) {
   if (!tgl) return '-'
   const bulan = ['Januari','Februari','Maret','April','Mei','Juni',
@@ -35,73 +150,92 @@ function fmtN(v, dec = 2) {
 //  Kembalikan y setelah garis (siap untuk konten berikutnya)
 // ══════════════════════════════════════════════════════════════════════════
 function drawKopBadrussalam(doc, s, ml, cw, yStart) {
-  const LOGO_SZ = 72   // ukuran kotak logo — proporsional, tidak terpotong
-  const logoPath = s.logo_sekolah
+  // Ukuran font dari DB (dengan default)
+  const fsYayasan = parseFloat(s.kop_font_yayasan) || 9
+  const fsJenis   = parseFloat(s.kop_font_jenis)   || 9.5
+  const fsNama    = parseFloat(s.kop_font_nama)     || 20
+  const LOGO_SZ   = 72
   let y = yStart
 
-  if (logoPath) {
-    try {
-      // fit: gambar masuk dalam kotak LOGO_SZ x LOGO_SZ, rasio terjaga
-      doc.image(logoPath, ml, y, { fit: [LOGO_SZ, LOGO_SZ] })
-    } catch (_) {
-      // fallback: kotak abu jika gambar gagal
-      doc.rect(ml, y, LOGO_SZ, LOGO_SZ).lineWidth(0.3).stroke('#ccc')
-    }
+  // Daftarkan font sesuai pilihan DB
+  // kop_font_family: 'serif' (Times New Roman-like) | 'sans' (Arial-like) | null (Helvetica)
+  const fontFamily = registerFonts(doc, s.kop_font_family)
+  const fBold       = getFont(fontFamily, 'bold')
+  const fRegular    = getFont(fontFamily, 'regular')
+  const fItalic     = getFont(fontFamily, 'italic')
+
+  const hasLogoKiri  = !!s.logo_sekolah
+  const hasLogoKanan = !!(s.logo_kemdikbud || s.logo_garuda) && (s.kop_show_logo_kanan !== 0)
+
+  // Logo kiri (sekolah)
+  if (hasLogoKiri) {
+    try { doc.image(s.logo_sekolah, ml, y, { fit: [LOGO_SZ, LOGO_SZ] }) }
+    catch (_) { doc.rect(ml, y, LOGO_SZ, LOGO_SZ).lineWidth(0.3).stroke('#ccc') }
   }
 
-  const kopX = ml + LOGO_SZ + 12
-  const kopW = cw - LOGO_SZ - 12
-  let ky = y + 2  // mulai sedikit lebih rendah agar teks ter-center secara visual
+  // Logo kanan (Kemdikbud / Kemenag / Garuda)
+  const logoKananPath = s.logo_kemdikbud || s.logo_garuda
+  if (hasLogoKanan && logoKananPath) {
+    try { doc.image(logoKananPath, ml + cw - LOGO_SZ, y, { fit: [LOGO_SZ, LOGO_SZ] }) }
+    catch (_) { doc.rect(ml + cw - LOGO_SZ, y, LOGO_SZ, LOGO_SZ).lineWidth(0.3).stroke('#ccc') }
+  }
+
+  // Area teks tengah
+  const leftPad  = hasLogoKiri  ? LOGO_SZ + 10 : 0
+  const rightPad = hasLogoKanan ? LOGO_SZ + 10 : 0
+  const kopX = ml + leftPad
+  const kopW = cw - leftPad - rightPad
+  let ky = y + 2
 
   // Baris 1 — Yayasan
   if (s.yayasan) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#000')
+    doc.font(fBold).fontSize(fsYayasan).fillColor('#000')
       .text(s.yayasan.toUpperCase(), kopX, ky, { width: kopW, align: 'center' })
-    ky += 11
+    ky += fsYayasan + 2
   }
 
   // Baris 2 — Jenis Sekolah
   if (s.jenis_sekolah) {
-    doc.font('Helvetica-Bold').fontSize(9.5).fillColor('#000')
+    doc.font(fBold).fontSize(fsJenis).fillColor('#000')
       .text(s.jenis_sekolah.toUpperCase(), kopX, ky, { width: kopW, align: 'center' })
-    ky += 11
+    ky += fsJenis + 2
   }
 
   // Baris 3 — Nama singkat BESAR
-  doc.font('Helvetica-Bold').fontSize(20).fillColor('#000')
+  doc.font(fBold).fontSize(fsNama).fillColor('#000')
     .text((s.nama_singkat || s.nama || '').toUpperCase(), kopX, ky, { width: kopW, align: 'center' })
-  ky += 23
+  ky += fsNama + 3
 
   // Baris 4 — NPSN + NSS sejajar
   const npsn   = s.npsn ? `NPSN: ${s.npsn}` : ''
   const nss    = s.nss  ? `NSS : ${s.nss}`  : ''
   const baris4 = [npsn, nss].filter(Boolean).join('          ')
   if (baris4) {
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#000')
+    doc.font(fBold).fontSize(8.5).fillColor('#000')
       .text(baris4, kopX, ky, { width: kopW, align: 'center' })
-    ky += 10
+    ky += 11
   }
 
   // Baris 5 — Alamat baris 1 (italic)
   if (s.alamat) {
-    doc.font('Helvetica-Oblique').fontSize(8).fillColor('#000')
+    doc.font(fItalic).fontSize(8.5).fillColor('#000')
       .text(s.alamat, kopX, ky, { width: kopW, align: 'center' })
-    ky += 10
+    ky += 11
   }
 
-  // Baris 6 — Alamat baris 2 / kecamatan (italic, opsional)
+  // Baris 6 — Alamat baris 2 / kecamatan (italic)
   if (s.alamat2) {
-    doc.font('Helvetica-Oblique').fontSize(8).fillColor('#000')
+    doc.font(fItalic).fontSize(8.5).fillColor('#000')
       .text(s.alamat2, kopX, ky, { width: kopW, align: 'center' })
-    ky += 10
+    ky += 11
   }
 
-  // Garis bawah KOP — tebal + tipis (selang 4pt)
+  // Garis bawah KOP — tebal + tipis
   const kopBottom = Math.max(ky + 4, y + LOGO_SZ + 4)
   doc.moveTo(ml, kopBottom).lineTo(ml + cw, kopBottom).lineWidth(3).stroke('#000')
   doc.moveTo(ml, kopBottom + 4).lineTo(ml + cw, kopBottom + 4).lineWidth(1).stroke('#000')
 
-  return kopBottom + 16  // y siap konten
+  return kopBottom + 16
 }
 
 // Alias lama — agar kode lama yang masih pakai drawKopResmi tidak error
@@ -155,21 +289,30 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
     let y = drawKopBadrussalam(doc, s, ml, cw, 18)
 
     // ════════════════════════════════════════════════════════════════════
-    // JUDUL
+    // JUDUL — bisa dikustomisasi dari Data Sekolah
     // ════════════════════════════════════════════════════════════════════
+    const judulSKL = (s.judul_skl || 'SURAT KETERANGAN LULUS').toUpperCase()
     doc.font('Helvetica-Bold').fontSize(12).fillColor('#000')
-      .text('SURAT KETERANGAN LULUS', ml, y, { width: cw, align: 'center', underline: true })
+      .text(judulSKL, ml, y, { width: cw, align: 'center', underline: true })
     y += 14
     doc.font('Helvetica').fontSize(9.5)
       .text(`Nomor : ${siswa.no_skl || '...................................................'}`, ml, y, { width: cw, align: 'center' })
     y += 22
 
     // ════════════════════════════════════════════════════════════════════
-    // PARAGRAF PEMBUKA — sesuai template asli SKL SMPIT Badrussalam
+    // PARAGRAF PEMBUKA — dari DB atau default
     // ════════════════════════════════════════════════════════════════════
     const tglSk    = fmtTgl(s.tgl_lulus)
     const tglRapat = s.tgl_rapat ? fmtTgl(s.tgl_rapat) : (s.tgl_lulus ? tglSk : '.....................')
-    const pembukaText = `Berdasarkan hasil rapat Dewan Guru yang dilaksankan tanggal ${tglRapat}, dan setelah dipastikan bahwa seluruh kriteria kelulusan telah terpenuhi sesuai dengan peraturan perundang undangan, Kepala ${s.nama || ''} Kabupaten ${s.kabupaten || 'Cirebon'} menerangkan Bahwa:`
+    // Template variabel: {tgl_rapat}, {nama_sekolah}, {kabupaten}, {tahun_ajaran}
+    const templatePembuka = s.paragraf_pembuka_skl ||
+      'Berdasarkan hasil rapat Dewan Guru yang dilaksankan tanggal {tgl_rapat}, dan setelah dipastikan bahwa seluruh kriteria kelulusan telah terpenuhi sesuai dengan peraturan perundang undangan, Kepala {nama_sekolah} Kabupaten {kabupaten} menerangkan Bahwa:'
+    const pembukaText = templatePembuka
+      .replace(/{tgl_rapat}/g,      tglRapat)
+      .replace(/{nama_sekolah}/g,   s.nama || '')
+      .replace(/{kabupaten}/g,      s.kabupaten || '')
+      .replace(/{tahun_ajaran}/g,   s.tahun_ajaran || '')
+      .replace(/{kota}/g,           s.kota || '')
     doc.font('Helvetica').fontSize(10).fillColor('#000')
       .text(pembukaText, ml, y, { width: cw, align: 'justify', lineGap: 4 })
     y += doc.heightOfString(pembukaText, { width: cw, lineGap: 4 }) + 14
@@ -305,9 +448,10 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
     y += rowH + 2 + 10
 
     // ════════════════════════════════════════════════════════════════════
-    // PARAGRAF PENUTUP — sesuai template asli
+    // PARAGRAF PENUTUP — dari DB atau default
     // ════════════════════════════════════════════════════════════════════
-    const penutupText = 'Demikan surat keterangan ini dibuat dengan sebenarnya untuk diketahui dan dipergunakan sebagaimana mestinya, dan bersifat/berlaku sementara sampai dengan diterbitkannya ijazah sebagai bukti kelulusan.'
+    const penutupText = s.paragraf_penutup_skl ||
+      'Demikian surat keterangan ini dibuat dengan sebenarnya untuk diketahui dan dipergunakan sebagaimana mestinya, dan bersifat/berlaku sementara sampai dengan diterbitkannya ijazah sebagai bukti kelulusan.'
     doc.font('Helvetica').fontSize(10).fillColor('#000')
       .text(penutupText, ml, y, { width: cw, align: 'justify', lineGap: 4 })
     y += doc.heightOfString(penutupText, { width: cw, lineGap: 4 }) + 20
@@ -722,16 +866,26 @@ function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mape
 
   const wb = new Workbook()
 
-  // ── Sheet 1: Rekap Nilai (semua mapel, nilai ijazah per siswa) ───────
-  const ws1 = wb.addSheet('Rekap Nilai')
-  ws1.setColWidths([5, 32, 14, ...mapelList.map(() => 11), 12, 13])
+  // ── Sheet 1: Rekap Nilai Ijazah per Siswa ────────────────────────────
+  // Isi kolom per mapel = Nilai Ijazah (sudah diolah)
+  const ws1 = wb.addSheet('Rekap Nilai Ijazah')
+  ws1.setColWidths([5, 32, 14, ...mapelList.map(() => 12), 14])
   ws1.freezePane(1, 3)
-  ws1.addRow(['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama), 'Rata-rata', 'Nilai Ijazah'], 'header', 40)
+  // Baris keterangan rumus
+  ws1.mergeCell(1, 1, 1, 3 + mapelList.length + 1)
+  ws1.addRow(
+    [`Nilai Ijazah = (Rata Raport × ${br}% + Nilai Ujian × ${bu}%) / ${totalB}   |   Angkatan: ${angkatan?.nama || 'Semua'}`],
+    'subheader', 20
+  )
+  ws1.addRow(
+    ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama), 'Rata NIJ'],
+    'header', 40
+  )
 
   siswaList.forEach((sw, ri) => {
     let jumlah = 0, cnt = 0
     const mapelVals = mapelList.map(m => {
-      const raps = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
+      const raps  = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
       const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
       const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
       const ujVal = ujN?.nilai_ujian ?? null
@@ -741,21 +895,24 @@ function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mape
     })
     const avg = cnt > 0 ? parseFloat((jumlah / cnt).toFixed(2)) : ''
     ws1.addRow(
-      [ri + 1, sw.nama || '', sw.nisn || '', ...mapelVals, avg, avg],
-      ['data_l', 'data_l', 'data', ...mapelList.map(() => 'data'), 'data', 'data'],
+      [ri + 1, sw.nama || '', sw.nisn || '', ...mapelVals, avg],
+      ['data_l', 'data_l', 'data', ...mapelList.map(() => 'data'), 'data'],
       16, ri
     )
   })
 
   // ── Sheet per Mata Pelajaran ─────────────────────────────────────────
+  // Kolom: No | Nama | NISN | Sem1 | Sem2... | Rata Raport | Nilai Raport(br%) | Nilai Ujian | Nilai Ujian(bu%) | Nilai Ijazah
   const semLabels = raportSems.map(sem => sem.label)
+  const pctR = `Bobot Raport (${br}%)`
+  const pctU = `Bobot Ujian (${bu}%)`
   mapelList.forEach(m => {
     const wsM = wb.addSheet(m.nama.slice(0, 31))
-    wsM.setColWidths([5, 32, 14, ...semLabels.map(() => 10), 11, 13, 13])
+    wsM.setColWidths([5, 32, 14, ...semLabels.map(() => 10), 13, 15, 13, 15, 14])
     wsM.freezePane(1, 3)
     wsM.addRow(
-      ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Nilai US', 'Rata Raport', 'Nilai Ijazah'],
-      'header', 36
+      ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Rata Raport', pctR, 'Nilai Ujian', pctU, 'Nilai Ijazah'],
+      'header', 40
     )
     siswaList.forEach((sw, ri) => {
       const rapVals = []
@@ -765,29 +922,49 @@ function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mape
         if (v != null) rapVals.push(v)
         return v ?? ''
       })
-      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
-      const rataR = rapVals.length === raportSems.length ? rapVals.reduce((a, b) => a + b, 0) / rapVals.length : null
-      const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
+      const ujN    = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      const ujVal  = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
+      const rataR  = rapVals.length === raportSems.length ? rapVals.reduce((a, b) => a + b, 0) / rapVals.length : null
+      // Nilai raport setelah dikalikan bobot
+      const nilRap = rataR != null ? parseFloat((rataR * br / totalB).toFixed(2)) : null
+      // Nilai ujian setelah dikalikan bobot
+      const nilUji = ujVal != null ? parseFloat((ujVal * bu / totalB).toFixed(2)) : null
+      // Nilai ijazah = nilRap + nilUji
+      const nij    = nilRap != null && nilUji != null ? parseFloat((nilRap + nilUji).toFixed(2)) : null
       wsM.addRow(
-        [ri + 1, sw.nama || '', sw.nisn || '', ...semCells,
-         ujVal ?? '', rataR != null ? parseFloat(rataR.toFixed(2)) : '', nij ?? ''],
-        ['data_l', 'data_l', 'data', ...semLabels.map(() => 'data'), 'data', 'data', 'data'],
+        [ri + 1, sw.nama || '', sw.nisn || '',
+         ...semCells,
+         rataR  != null ? parseFloat(rataR.toFixed(2))  : '',
+         nilRap != null ? nilRap : '',
+         ujVal  != null ? ujVal  : '',
+         nilUji != null ? nilUji : '',
+         nij    != null ? nij    : ''],
+        ['data_l', 'data_l', 'data', ...semLabels.map(() => 'data'), 'data', 'data', 'data', 'data', 'data'],
         16, ri
       )
     })
   })
 
-  // ── Sheet Nilai Ijazah (ringkasan semua mapel) ───────────────────────
+  // ── Sheet Rekap Nilai Ijazah (semua mapel per siswa) ─────────────────
+  // Kolom: No | Nama | NISN | Mapel1 NIJ | Mapel2 NIJ | ... | Rata NIJ
   const wsN = wb.addSheet('Nilai Ijazah')
   wsN.setColWidths([5, 32, 14, ...mapelList.map(() => 12), 14])
   wsN.freezePane(1, 3)
-  wsN.addRow(['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama.slice(0, 20)), 'Rata-rata NIJ'], 'header', 40)
+  // Baris sub-header: keterangan rumus
+  wsN.mergeCell(1, 1, 1, 3 + mapelList.length + 1)
+  wsN.addRow(
+    [`Nilai Ijazah = (Rata Raport × ${br}% + Nilai Ujian × ${bu}%) / ${totalB}`],
+    'subheader', 20
+  )
+  wsN.addRow(
+    ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama.slice(0, 20)), 'Rata NIJ'],
+    'header', 36
+  )
 
   siswaList.forEach((sw, ri) => {
     let sumNij = 0, cntNij = 0
     const nijCells = mapelList.map(m => {
-      const raps = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
+      const raps  = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
       const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
       const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
       const ujVal = ujN?.nilai_ujian ?? null
