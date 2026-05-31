@@ -4,6 +4,11 @@ import { Download, Medal, Trophy, Award } from 'lucide-react'
 import type { RankingRow } from '../../types'
 
 interface Props { showToast: (msg: string, type?: 'success'|'error') => void }
+// Override RankingRow to allow partial data
+interface RankingRowExt extends RankingRow {
+  mapel_isi?: number
+  mapel_total?: number
+}
 
 export function RankingPage({ showToast }: Props) {
   const [data, setData]       = useState<RankingRow[]>([])
@@ -147,7 +152,11 @@ export function RankingPage({ showToast }: Props) {
                     <td className="px-4 py-3 text-center">
                       {r.lengkap
                         ? <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">Lengkap</span>
-                        : <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">Belum</span>
+                        : <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                            {(r as any).mapel_isi != null
+                              ? `${(r as any).mapel_isi}/${(r as any).mapel_total} mapel`
+                              : 'Belum'}
+                          </span>
                       }
                     </td>
                   </tr>
