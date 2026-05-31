@@ -39,7 +39,8 @@ export interface Sekolah {
   jenis_sekolah?: string
   alamat2?: string
   no_skkb?: string
-  // PDF margin
+  pdf_ukuran?: string  // 'A4' | 'F4'
+  // PDF margin (disimpan dalam pt, ditampilkan dalam cm di UI)
   pdf_margin_left?: number
   pdf_margin_right?: number
   pdf_margin_top?: number
