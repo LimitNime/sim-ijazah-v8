@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
     getSiswa:       id   => invoke('nilai:get_siswa',id),
     saveBatch:      rows => invoke('nilai:save_batch',rows),
     rekap:          ()   => invoke('nilai:rekap'),
+    ranking:        ()   => invoke('nilai:ranking'),
     rekapSiswa:     id   => invoke('nilai:rekap_siswa',id),
     rekapAngkatan:  id   => invoke('nilai:rekap_angkatan',id),
     importTemplate: ()   => invoke('nilai:import_template'),
@@ -71,9 +72,10 @@ contextBridge.exposeInMainWorld('api', {
     saveAll: data         => invoke('nomor_surat:save_all', data),
   },
   export: {
-    excelAngkatan: angkatan_id => invoke('export:excel_angkatan', angkatan_id),
+    excelAngkatan: ()          => invoke('export:excel_angkatan'),
     excelSiswa:    siswa_id    => invoke('export:excel_siswa', siswa_id),
     excelRekap:    ()          => invoke('export:excel_rekap'),
+    excelRanking:  ()          => invoke('export:excel_ranking'),
   },
   pdf: {
     skl:             angkatan_id => invoke('pdf:skl', angkatan_id),
