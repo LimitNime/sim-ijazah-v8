@@ -67,7 +67,7 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    sekolahApi.get().then(d => { setForm(d || {}); setLoading(false) })
+    sekolahApi.get().then((d: any) => { setForm(d || {}); setLoading(false) })
   }, [])
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
@@ -108,6 +108,116 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
         <p className="mt-3 text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
           Logo akan otomatis muncul di dokumen <strong>Ijazah</strong> dan <strong>Transkrip Nilai</strong> saat dicetak.
         </p>
+      </SectionCard>
+
+      {/* Kop Surat */}
+      <SectionCard title="Tampilan Kop Surat">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-gray-500 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            Pengaturan ini mempengaruhi tampilan kop di semua dokumen PDF (SKL, DKN, Nilai Ijazah, Transkrip, dll).
+          </p>
+
+          {/* Preview kop sederhana */}
+          <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 font-serif text-center">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded border-2 border-dashed border-gray-300 bg-white flex items-center justify-center text-gray-300 text-xs shrink-0">
+                {form.logo_sekolah ? <img src={form.logo_sekolah} className="w-full h-full object-contain p-1"/> : 'Logo'}
+              </div>
+              <div className="flex-1 text-center">
+                {form.yayasan && <p className="font-bold text-gray-700" style={{fontSize: `${form.kop_font_yayasan || 9}pt`}}>{form.yayasan.toUpperCase()}</p>}
+                {form.jenis_sekolah && <p className="font-bold text-gray-700" style={{fontSize: `${form.kop_font_jenis || 9.5}pt`}}>{form.jenis_sekolah.toUpperCase()}</p>}
+                <p className="font-black text-gray-900" style={{fontSize: `${form.kop_font_nama || 20}pt`}}>{(form.nama_singkat || form.nama || 'NAMA SEKOLAH').toUpperCase()}</p>
+                {(form.npsn || form.nss) && <p className="font-bold text-gray-600 text-[8pt]">NPSN: {form.npsn}{'          '}NSS: {form.nss}</p>}
+                {form.alamat && <p className="italic text-gray-500 text-[8pt]">{form.alamat}</p>}
+                {form.alamat2 && <p className="italic text-gray-500 text-[8pt]">{form.alamat2}</p>}
+              </div>
+              {form.kop_show_logo_kanan !== 0 && (form.logo_kemdikbud || form.logo_garuda) && (
+                <div className="w-14 h-14 rounded border-2 border-dashed border-gray-300 bg-white flex items-center justify-center shrink-0">
+                  <img src={form.logo_kemdikbud || form.logo_garuda} className="w-full h-full object-contain p-1"/>
+                </div>
+              )}
+            </div>
+            <div className="mt-2 border-t-4 border-t-black border-b border-b-black pb-[3px]"/>
+          </div>
+
+          {/* Logo kanan */}
+          <div className="flex items-center gap-3">
+            <input type="checkbox" id="show_logo_kanan"
+              checked={form.kop_show_logo_kanan !== 0}
+              onChange={e => set('kop_show_logo_kanan', e.target.checked ? 1 : 0)}
+              className="w-4 h-4 rounded"/>
+            <label htmlFor="show_logo_kanan" className="text-sm text-gray-700 cursor-pointer">
+              Tampilkan logo kanan (Kemdikbud/Kemenag) di kop surat
+              {!(form.logo_kemdikbud || form.logo_garuda) && <span className="ml-2 text-xs text-amber-500">(upload logo Kemdikbud di bagian Logo dulu)</span>}
+            </label>
+          </div>
+
+          {/* Pilih jenis font */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Jenis Font Kop</label>
+            <select
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+              value={form.kop_font_family || ''}
+              onChange={e => set('kop_font_family', e.target.value || null)}
+            >
+              <option value="">Helvetica (default, selalu tersedia)</option>
+              <optgroup label="── Bundled (selalu tersedia) ──">
+                <option value="Times New Roman">Times New Roman (serif, seperti di gambar)</option>
+                <option value="Arial">Arial (sans-serif, modern)</option>
+              </optgroup>
+              <optgroup label="── Windows Fonts (jika terinstall) ──">
+                <option value="Calibri">Calibri</option>
+                <option value="Cambria">Cambria (serif)</option>
+                <option value="Georgia">Georgia (serif)</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Tahoma">Tahoma</option>
+                <option value="Book Antiqua">Book Antiqua (serif, formal)</option>
+                <option value="Palatino">Palatino (serif, elegan)</option>
+              </optgroup>
+            </select>
+            <p className="text-xs text-gray-400">
+              Font Windows hanya berfungsi jika font tersebut terinstall di komputer. Jika tidak, otomatis fallback ke Helvetica.
+              <strong> Times New Roman paling mirip dengan dokumen formal sekolah.</strong>
+            </p>
+          </div>
+
+          {/* Font sizes */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                Font Yayasan (pt)
+              </label>
+              <input type="number" min="6" max="20" step="0.5"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={form.kop_font_yayasan || 9}
+                onChange={e => set('kop_font_yayasan', parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-gray-400">Default: 9pt</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                Font Jenis Sekolah (pt)
+              </label>
+              <input type="number" min="6" max="20" step="0.5"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={form.kop_font_jenis || 9.5}
+                onChange={e => set('kop_font_jenis', parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-gray-400">Default: 9.5pt</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                Font Nama Sekolah (pt)
+              </label>
+              <input type="number" min="10" max="36" step="0.5"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                value={form.kop_font_nama || 20}
+                onChange={e => set('kop_font_nama', parseFloat(e.target.value))}
+              />
+              <p className="text-xs text-gray-400">Default: 20pt — nama besar di tengah kop</p>
+            </div>
+          </div>
+        </div>
       </SectionCard>
 
       {/* Identitas */}
@@ -178,6 +288,49 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
               <strong>Rumus Nilai Ijazah:</strong> (Rata Raport × {form.bobot_raport ?? 0}%) + (Nilai US × {form.bobot_ujian ?? 0}%)
               &nbsp;— Total: <strong>{(form.bobot_raport ?? 0) + (form.bobot_ujian ?? 0)}%</strong>
             </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Konfigurasi Teks SKL */}
+      <SectionCard title="Konfigurasi Teks SKL">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+            Variabel yang bisa dipakai di teks:&nbsp;
+            <code className="bg-white px-1 rounded">{"'{tgl_rapat}'"}</code>&nbsp;
+            <code className="bg-white px-1 rounded">{"'{nama_sekolah}'"}</code>&nbsp;
+            <code className="bg-white px-1 rounded">{"'{kabupaten}'"}</code>&nbsp;
+            <code className="bg-white px-1 rounded">{"'{tahun_ajaran}'"}</code>&nbsp;
+            <code className="bg-white px-1 rounded">{"'{kota}'"}</code>
+          </p>
+          <Input
+            label="Judul Dokumen SKL"
+            value={form.judul_skl || ''}
+            onChange={e => set('judul_skl', e.target.value)}
+            placeholder="SURAT KETERANGAN LULUS"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Paragraf Pembuka SKL</label>
+            <textarea
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-y min-h-[90px]"
+              value={form.paragraf_pembuka_skl || ''}
+              onChange={e => set('paragraf_pembuka_skl', e.target.value)}
+              placeholder="Berdasarkan hasil rapat Dewan Guru yang dilaksankan tanggal {tgl_rapat}, dan setelah dipastikan bahwa seluruh kriteria kelulusan telah terpenuhi ... Kepala {nama_sekolah} Kabupaten {kabupaten} menerangkan Bahwa:"
+            />
+            <p className="text-xs text-gray-400">Kosongkan untuk pakai teks default bawaan sistem</p>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Paragraf Penutup SKL</label>
+            <textarea
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-y min-h-[90px]"
+              value={form.paragraf_penutup_skl || ''}
+              onChange={e => set('paragraf_penutup_skl', e.target.value)}
+              placeholder="Demikian surat keterangan ini dibuat dengan sebenarnya untuk diketahui dan dipergunakan sebagaimana mestinya, dan bersifat/berlaku sementara sampai dengan diterbitkannya ijazah sebagai bukti kelulusan."
+            />
+            <p className="text-xs text-gray-400">Kosongkan untuk pakai teks default bawaan sistem</p>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button icon={<Save className="w-4 h-4"/>} loading={saving} onClick={save}>Simpan</Button>
           </div>
         </div>
       </SectionCard>
