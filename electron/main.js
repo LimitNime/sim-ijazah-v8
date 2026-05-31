@@ -111,6 +111,10 @@ function initDB() {
     keputusan_kepala: 'TEXT', no_sk: 'TEXT',
     kabupaten: 'TEXT', tgl_rapat: 'TEXT', jenis_kekhususan: 'TEXT',
     nama_singkat: 'TEXT', yayasan: 'TEXT', jenis_sekolah: 'TEXT',
+    judul_skl: 'TEXT', paragraf_pembuka_skl: 'TEXT', paragraf_penutup_skl: 'TEXT',
+    kop_font_nama: 'REAL', kop_font_yayasan: 'REAL', kop_font_jenis: 'REAL',
+    kop_show_logo_kanan: 'INTEGER', kop_font_family: 'TEXT',
+    judul_sk_kelulusan: 'TEXT', paragraf_pembuka_sk: 'TEXT', paragraf_penutup_sk: 'TEXT',
     alamat2: 'TEXT', no_skkb: 'TEXT'
   }
   Object.entries(newSekolahCols).forEach(([col, type]) => {
@@ -316,6 +320,136 @@ function registerIPC() {
     })
   })
 
+  // ── Ranking Siswa ────────────────────────────────────────────────────────
+  ipcMain.handle('nilai:ranking', () => {
+    const siswa      = db.prepare('SELECT id,no_urut,nama,nisn,kelas FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    const mapels     = db.prepare('SELECT id,nama FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
+    const s          = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
+    const semList    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+    const ujianSem   = semList.find(s => s.is_ujian)
+    const raportSems = semList.filter(s => !s.is_ujian)
+    if (!s || !s.bobot_raport) return []
+    const br = s.bobot_raport, bu = s.bobot_ujian, tb = br + bu
+    const mapelIds = mapels.map(m => m.id)
+
+    const allNilai = db.prepare('SELECT siswa_id,mapel_id,semester_id,nilai_p,nilai_ujian FROM nilai').all()
+    const nilaiIdx = {}
+    for (const n of allNilai) {
+      if (!nilaiIdx[n.siswa_id]) nilaiIdx[n.siswa_id] = {}
+      if (!nilaiIdx[n.siswa_id][n.mapel_id]) nilaiIdx[n.siswa_id][n.mapel_id] = {}
+      nilaiIdx[n.siswa_id][n.mapel_id][n.semester_id] = n
+    }
+
+    const rows = siswa.map(sw => {
+      const swNilai = nilaiIdx[sw.id] || {}
+      let sumRap = 0, sumUji = 0, sumNij = 0, cntNij = 0
+      const perMapel = mapels.map(m => {
+        const mNilai = swNilai[m.id] || {}
+        const raps   = raportSems.map(sem => {
+          const n = mNilai[sem.id]
+          return n && n.nilai_p != null ? parseFloat(n.nilai_p) : null
+        })
+        const rataR = raps.every(v => v !== null) && raps.length > 0
+          ? raps.reduce((a,b)=>a+b,0)/raps.length : null
+        const usN   = ujianSem ? mNilai[ujianSem.id] : null
+        const ujVal = usN?.nilai_ujian != null ? parseFloat(usN.nilai_ujian) : null
+        const nij   = rataR != null && ujVal != null
+          ? Math.round((rataR*br + ujVal*bu)/tb*100)/100 : null
+        if (nij != null) { sumRap += rataR; sumUji += ujVal; sumNij += nij; cntNij++ }
+        return { mapel_id: m.id, nama: m.nama, rata_raport: rataR, nilai_ujian: ujVal, nilai_ijazah: nij }
+      })
+      const cnt = cntNij
+      return {
+        id:          sw.id,
+        nama:        sw.nama,
+        nisn:        sw.nisn,
+        kelas:       sw.kelas,
+        rata_raport: cnt > 0 ? Math.round(sumRap/cnt*100)/100 : null,
+        nilai_ujian: cnt > 0 ? Math.round(sumUji/cnt*100)/100 : null,
+        nilai_ijazah:cnt > 0 ? Math.round(sumNij/cnt*100)/100 : null,
+        lengkap:     cnt === mapelIds.length && mapelIds.length > 0,
+        per_mapel:   perMapel,
+      }
+    })
+    // Sort by nilai_ijazah DESC, null di bawah
+    rows.sort((a,b) => {
+      if (a.nilai_ijazah == null && b.nilai_ijazah == null) return 0
+      if (a.nilai_ijazah == null) return 1
+      if (b.nilai_ijazah == null) return -1
+      return b.nilai_ijazah - a.nilai_ijazah
+    })
+    // Tambah ranking
+    let rank = 1
+    rows.forEach((r, i) => {
+      if (r.nilai_ijazah == null) { r.ranking = null; return }
+      if (i > 0 && rows[i-1].nilai_ijazah === r.nilai_ijazah) r.ranking = rows[i-1].ranking
+      else r.ranking = rank
+      rank++
+    })
+    return rows
+  })
+
+  // ── Export Excel Ranking ──────────────────────────────────────────────────
+  ipcMain.handle('export:excel_ranking', async () => {
+    try {
+      const { Workbook } = require('./excel-builder')
+      const siswa      = db.prepare('SELECT id,no_urut,nama,nisn,kelas FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      const mapels     = db.prepare('SELECT id,nama FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
+      const s          = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
+      const semList    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+      const ujianSem   = semList.find(s => s.is_ujian)
+      const raportSems = semList.filter(s => !s.is_ujian)
+      const br = s?.bobot_raport ?? 60, bu = s?.bobot_ujian ?? 40, tb = br+bu
+      const allNilai   = db.prepare('SELECT siswa_id,mapel_id,semester_id,nilai_p,nilai_ujian FROM nilai').all()
+      const nilaiIdx   = {}
+      for (const n of allNilai) {
+        if (!nilaiIdx[n.siswa_id]) nilaiIdx[n.siswa_id] = {}
+        if (!nilaiIdx[n.siswa_id][n.mapel_id]) nilaiIdx[n.siswa_id][n.mapel_id] = {}
+        nilaiIdx[n.siswa_id][n.mapel_id][n.semester_id] = n
+      }
+      const mapelIds = mapels.map(m => m.id)
+
+      const rows = siswa.map(sw => {
+        const swNilai = nilaiIdx[sw.id] || {}
+        let sumRap=0, sumUji=0, sumNij=0, cntNij=0
+        mapels.forEach(m => {
+          const mNilai = swNilai[m.id] || {}
+          const raps   = raportSems.map(sem => { const n=mNilai[sem.id]; return n&&n.nilai_p!=null?parseFloat(n.nilai_p):null })
+          const rataR  = raps.every(v=>v!==null)&&raps.length>0 ? raps.reduce((a,b)=>a+b,0)/raps.length : null
+          const usN    = ujianSem ? mNilai[ujianSem.id] : null
+          const ujVal  = usN?.nilai_ujian!=null ? parseFloat(usN.nilai_ujian) : null
+          const nij    = rataR!=null&&ujVal!=null ? (rataR*br+ujVal*bu)/tb : null
+          if (nij!=null){sumRap+=rataR;sumUji+=ujVal;sumNij+=nij;cntNij++}
+        })
+        const cnt = cntNij
+        return {
+          nama: sw.nama||'', nisn: sw.nisn||'', kelas: sw.kelas||'',
+          rata_raport:  cnt>0 ? Math.round(sumRap/cnt*100)/100 : null,
+          nilai_ujian:  cnt>0 ? Math.round(sumUji/cnt*100)/100 : null,
+          nilai_ijazah: cnt>0 && cnt===mapelIds.length ? Math.round(sumNij/cnt*100)/100 : null,
+        }
+      })
+      rows.sort((a,b)=>{ if(a.nilai_ijazah==null&&b.nilai_ijazah==null)return 0; if(a.nilai_ijazah==null)return 1; if(b.nilai_ijazah==null)return -1; return b.nilai_ijazah-a.nilai_ijazah })
+      let rank=1; rows.forEach((r,i)=>{ if(r.nilai_ijazah==null){r.ranking='-';return}; if(i>0&&rows[i-1].nilai_ijazah===r.nilai_ijazah)r.ranking=rows[i-1].ranking; else r.ranking=rank; rank++ })
+
+      const wb = new Workbook()
+      const ws = wb.addSheet('Ranking')
+      ws.setColWidths([8, 34, 16, 14, 15, 15, 16])
+      ws.addRow(['Ranking','Nama Siswa','NISN','Kelas',`Rata Raport`,`Nilai Ujian`,`Nilai Ijazah`], 'header', 28)
+      rows.forEach((r,i) => {
+        ws.addRow(
+          [r.ranking, r.nama, r.nisn, r.kelas||'-',
+           r.rata_raport??'-', r.nilai_ujian??'-', r.nilai_ijazah??'-'],
+          ['data','data_l','data','data','data','data','data'], 16, i
+        )
+      })
+      const filePath = path.join(outputPath, `Ranking_${Date.now()}.xlsx`)
+      await wb.writeFile(filePath)
+      shell.openPath(filePath)
+      return safeReturn({ ok: true })
+    } catch(e) { return safeReturn({ ok:false, error: String(e instanceof Error?e.message:e) }) }
+  })
+
   // ── Export Excel Rekap Nilai — main process ambil langsung dari DB ────────
   ipcMain.handle('export:excel_rekap', async () => {
     try {
@@ -361,10 +495,10 @@ function registerIPC() {
         )
       })
 
-      const result = await dialog.showSaveDialog({ title: 'Simpan Rekap Nilai', defaultPath: 'Rekap_Nilai.xlsx', filters: [{ name:'Excel', extensions:['xlsx'] }] })
-      if (result.canceled) return { ok: false, message: 'Dibatalkan' }
-      await wb.writeFile(result.filePath)
-      shell.openPath(result.filePath)
+      const fname = `Rekap_Nilai_${Date.now()}.xlsx`
+      const filePath = path.join(outputPath, fname)
+      await wb.writeFile(filePath)
+      shell.openPath(filePath)
       return safeReturn({ ok: true })
     } catch (e) { return safeReturn({ ok: false, message: String(e instanceof Error ? e.message : e) }) }
   })
@@ -466,29 +600,27 @@ function registerIPC() {
     } catch (e) { return { ok: false, error: e.message } }
   })
 
-  ipcMain.handle('export:excel_angkatan', async (_, angkatan_id) => {
+  // export:excel_angkatan — tidak menerima parameter dari renderer
+  // angkatan aktif dibaca langsung dari DB (angkatan is_aktif=1)
+  // Sehingga tidak ada data yang dikirim renderer -> main (eliminasi clone error)
+  ipcMain.handle('export:excel_angkatan', async () => {
     try {
-      // Step 1: load module
       const { exportExcelAngkatan } = require('./pdf-generator')
-      // Step 2: query DB
-      const angkatan  = angkatan_id ? db.prepare('SELECT * FROM angkatan WHERE id=?').get(angkatan_id) : null
-      const siswaList = angkatan_id
-        ? db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(angkatan_id)
-        : db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
-      const mapelList = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
-      const semList   = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
-      const seo       = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
-      const ujianSem  = semList.find(s => s.is_ujian) || semList[semList.length-1]
+      // Baca semua data dari DB sendiri
+      const angkatan   = db.prepare('SELECT * FROM angkatan WHERE is_aktif=1 ORDER BY id DESC').get() || null
+      const siswaList  = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      const mapelList  = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
+      const semList    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+      const seo        = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const ujianSem   = semList.find(s => s.is_ujian) || semList[semList.length - 1]
       const raportSems = semList.filter(s => !s.is_ujian)
       const nilaiData  = getAllNilai()
-      const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, totalB = br+bu
-      // Step 3: generate file
+      const br = seo?.bobot_raport ?? 60, bu = seo?.bobot_ujian ?? 40, totalB = br + bu
       const filePath = await exportExcelAngkatan(outputPath, {
         sekolah: seo, angkatan, siswaList, mapelList, semList,
-        nilaiData, ujianSemId: ujianSem?.id, raportSemIds: raportSems.map(s=>s.id),
+        nilaiData, ujianSemId: ujianSem?.id, raportSemIds: raportSems.map(s => s.id),
         br, bu, totalB
       })
-      // Step 4: open file
       shell.openPath(String(filePath))
       return safeReturn({ ok: true })
     } catch (e) {
@@ -569,24 +701,24 @@ function registerIPC() {
   })
 
   // Generate No SKL otomatis
-  ipcMain.handle('siswa:generate_no_skl', (_, { kode_sekolah, bulan_romawi, tahun, mulai_dari }) => {
-    const jenjang = db.prepare('SELECT jenjang FROM sekolah WHERE id=1').get()?.jenjang || 'SMK'
-    const kodeJenjang = {
-      'SD': '421.2', 'MI': '421.2',
-      'SMP': '421.3', 'MTs': '421.3',
-      'SMA': '421.3', 'MA': '421.3',
-      'SMK': '421.5',
-    }[jenjang] || '421.5'
-    const siswaList = db.prepare('SELECT id, no_urut FROM siswa ORDER BY no_urut ASC').all()
-    const bulan = bulan_romawi || ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][new Date().getMonth()]
-    const thn = tahun || new Date().getFullYear()
-    const kode = kode_sekolah || 'SKL'
+  ipcMain.handle('siswa:generate_no_skl', (_, { pola, mulai_dari }) => {
+    // pola: string bebas dengan variabel {no_urut}, {bulan}, {tahun}
+    // Contoh: "422/{no_urut}/SKL-MI.BADRUSSALAM/{bulan}/{tahun}"
+    const BULAN_ROM = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+    const now = new Date()
+    const bulanDefault = BULAN_ROM[now.getMonth()]
+    const tahunDefault = String(now.getFullYear())
+    const polaParsed = (pola || '422/{no_urut}/SKL/{bulan}/{tahun}')
+      .replace(/{bulan}/g,  bulanDefault)
+      .replace(/{tahun}/g,  tahunDefault)
+
+    const siswaList = db.prepare('SELECT id, no_urut FROM siswa ORDER BY COALESCE(no_urut,99999), id ASC').all()
     let nomor = parseInt(mulai_dari) || 1
     const stmt = db.prepare('UPDATE siswa SET no_skl=? WHERE id=?')
     const run = db.transaction(() => {
       siswaList.forEach(s => {
         const noUrut = String(nomor).padStart(3, '0')
-        const noSkl = `${kodeJenjang}/${noUrut}/${kode}/${bulan}/${thn}`
+        const noSkl = polaParsed.replace(/{no_urut}/g, noUrut)
         stmt.run(noSkl, s.id)
         nomor++
       })
@@ -725,9 +857,9 @@ function registerIPC() {
       ws.setColWidths(headers.map(() => 20))
       ws.addRow(headers, 'header', 30)
       ws.addRow(contoh,  headers.map(() => 'data_l'), 18, 0)
-      const result = await dialog.showSaveDialog({ title: 'Simpan Template Import Siswa', defaultPath: 'template_import_siswa.xlsx', filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
-      if (result.canceled) return { ok: false, message: 'Dibatalkan' }
-      await wb.writeFile(result.filePath)
+      const filePath = path.join(outputPath, 'template_import_siswa.xlsx')
+      await wb.writeFile(filePath)
+      shell.openPath(filePath)
       return { ok: true }
     } catch (e) { return { ok: false, message: e.message } }
   })
@@ -782,9 +914,9 @@ function registerIPC() {
         })
       })
 
-      const result = await dialog.showSaveDialog({ title: 'Simpan Template Import Nilai', defaultPath: 'template_import_nilai.xlsx', filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
-      if (result.canceled) return { ok: false, message: 'Dibatalkan' }
-      await wb.writeFile(result.filePath)
+      const filePath = path.join(outputPath, 'template_import_nilai.xlsx')
+      await wb.writeFile(filePath)
+      shell.openPath(filePath)
       return { ok: true }
     } catch (e) { return { ok: false, message: e.message } }
   })
@@ -913,14 +1045,10 @@ function registerIPC() {
         )
       })
 
-      const fname = `Rekap_${(siswa.nama||'Siswa').replace(/\s+/g,'_')}.xlsx`
-      const saveResult = await dialog.showSaveDialog({
-        title: 'Simpan Rekap Siswa', defaultPath: fname,
-        filters: [{ name:'Excel', extensions:['xlsx'] }]
-      })
-      if (saveResult.canceled) return { ok: false, message: 'Dibatalkan' }
-      await wb.writeFile(saveResult.filePath)
-      shell.openPath(saveResult.filePath)
+      const fname = `Rekap_${(siswa.nama||'Siswa').replace(/[^a-zA-Z0-9_]/g,'_')}.xlsx`
+      const filePath = path.join(outputPath, fname)
+      await wb.writeFile(filePath)
+      shell.openPath(filePath)
       return safeReturn({ ok: true })
     } catch (e) { return safeReturn({ ok: false, message: String(e instanceof Error ? e.message : e) }) }
   })
@@ -957,17 +1085,15 @@ function registerIPC() {
   ipcMain.handle('db:backup', async () => {
     const now   = new Date()
     const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`
-    const result = await dialog.showSaveDialog({
-      title: 'Simpan Backup (ZIP)',
-      defaultPath: `SIM_Ijazah_Backup_${stamp}.zip`,
-      filters: [{ name: 'File ZIP', extensions: ['zip'] }]
-    })
-    if (result.canceled || !result.filePath) return { ok: false, message: 'Dibatalkan' }
     try {
-      const AdmZip = require('adm-zip')
-      const tmpDb  = path.join(app.getPath('temp'), `sim_backup_${stamp}.db`)
+      const zlib = require('zlib')
+      // Backup DB ke file sementara
+      const tmpDb = path.join(app.getPath('temp'), `sim_backup_${stamp}.db`)
       await db.backup(tmpDb)
-      // Export data ke JSON
+      const dbBuf = fs.readFileSync(tmpDb)
+      fs.unlinkSync(tmpDb)
+
+      // Export JSON
       const exportData = {
         exported_at: new Date().toISOString(),
         sekolah:     db.prepare('SELECT * FROM sekolah').all(),
@@ -978,10 +1104,8 @@ function registerIPC() {
         angkatan:    db.prepare('SELECT * FROM angkatan').all(),
         nomor_surat: db.prepare('SELECT * FROM nomor_surat').all(),
       }
-      const zip = new AdmZip()
-      zip.addLocalFile(tmpDb, '', 'SIM_Ijazah.db')
-      zip.addFile('data_export.json', Buffer.from(JSON.stringify(exportData, null, 2), 'utf8'))
-      zip.addFile('CARA_RESTORE.txt', Buffer.from(
+      const jsonBuf  = Buffer.from(JSON.stringify(exportData, null, 2), 'utf8')
+      const txtBuf   = Buffer.from(
         'Cara Restore Backup SIM Ijazah:\n' +
         '1. Buka aplikasi SIM Ijazah\n' +
         '2. Klik tombol Restore di menu Rekap & Cetak\n' +
@@ -990,11 +1114,67 @@ function registerIPC() {
         'File SIM_Ijazah.db adalah database utama.\n' +
         'File data_export.json adalah export JSON untuk keperluan lain.\n',
         'utf8'
-      ))
-      zip.writeZip(result.filePath)
-      fs.unlinkSync(tmpDb)
-      return { ok: true, path: result.filePath }
-    } catch (e) { return { ok: false, message: e.message } }
+      )
+
+      // Buat ZIP pakai Node.js built-in (tanpa library tambahan)
+      const deflate = (buf) => new Promise((res, rej) =>
+        zlib.deflateRaw(buf, (err, out) => err ? rej(err) : res(out))
+      )
+      const w16 = (b,v,o) => { b[o]=v&0xFF; b[o+1]=(v>>8)&0xFF }
+      const w32 = (b,v,o) => { b[o]=v&0xFF; b[o+1]=(v>>8)&0xFF; b[o+2]=(v>>16)&0xFF; b[o+3]=(v>>24)&0xFF }
+      const crc = (buf) => {
+        const t = new Uint32Array(256)
+        for (let i=0;i<256;i++){let c=i; for(let j=0;j<8;j++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[i]=c}
+        let c=0xFFFFFFFF
+        for (let i=0;i<buf.length;i++) c=t[(c^buf[i])&0xFF]^(c>>>8)
+        return (c^0xFFFFFFFF)>>>0
+      }
+      const mkEntry = async (name, raw) => {
+        const nameBuf = Buffer.from(name,'utf8')
+        const comp    = await deflate(raw)
+        const data    = comp.length < raw.length ? comp : raw
+        const meth    = comp.length < raw.length ? 8 : 0
+        const lh = Buffer.alloc(30 + nameBuf.length)
+        w32(lh,0x04034b50,0); w16(lh,20,4); w16(lh,0,6); w16(lh,meth,8)
+        w16(lh,0,10); w16(lh,0,12); w32(lh,crc(raw),14)
+        w32(lh,data.length,18); w32(lh,raw.length,22)
+        w16(lh,nameBuf.length,26); w16(lh,0,28); nameBuf.copy(lh,30)
+        return { name: nameBuf, raw, data, meth, crc: crc(raw), lh }
+      }
+      const entries = await Promise.all([
+        mkEntry('SIM_Ijazah.db',      dbBuf),
+        mkEntry('data_export.json',   jsonBuf),
+        mkEntry('CARA_RESTORE.txt',   txtBuf),
+      ])
+      const parts = []; const cds = []; let offset = 0
+      for (const e of entries) {
+        cds.push({ e, offset })
+        parts.push(e.lh, e.data)
+        offset += e.lh.length + e.data.length
+      }
+      const cdStart = offset
+      for (const {e, offset: loff} of cds) {
+        const cd = Buffer.alloc(46 + e.name.length)
+        w32(cd,0x02014b50,0); w16(cd,20,4); w16(cd,20,6); w16(cd,0,8)
+        w16(cd,e.meth,10); w16(cd,0,12); w16(cd,0,14); w32(cd,e.crc,16)
+        w32(cd,e.data.length,20); w32(cd,e.raw.length,24)
+        w16(cd,e.name.length,28); w16(cd,0,30); w16(cd,0,32)
+        w16(cd,0,34); w16(cd,0,36); w32(cd,0,38); w32(cd,loff,42)
+        e.name.copy(cd,46); parts.push(cd); offset += cd.length
+      }
+      const eocd = Buffer.alloc(22)
+      w32(eocd,0x06054b50,0); w16(eocd,0,4); w16(eocd,0,6)
+      w16(eocd,entries.length,8); w16(eocd,entries.length,10)
+      w32(eocd,offset-cdStart,12); w32(eocd,cdStart,16); w16(eocd,0,20)
+      parts.push(eocd)
+
+      const zipBuf     = Buffer.concat(parts)
+      const zipName    = `SIM_Ijazah_Backup_${stamp}.zip`
+      const zipPath    = path.join(outputPath, zipName)
+      fs.writeFileSync(zipPath, zipBuf)
+      shell.openPath(outputPath) // buka folder output
+      return safeReturn({ ok: true, path: zipPath, name: zipName })
+    } catch (e) { return safeReturn({ ok: false, message: String(e instanceof Error ? e.message : e) }) }
   })
 
   ipcMain.handle('db:restore', async () => {
@@ -1012,22 +1192,57 @@ function registerIPC() {
       let backupPath = result.filePaths[0]
       // Jika ZIP, extract file .db terlebih dahulu
       if (backupPath.endsWith('.zip')) {
-        const AdmZip = require('adm-zip')
-        const zip = new AdmZip(backupPath)
-        const dbEntry = zip.getEntries().find(e => e.entryName.endsWith('.db'))
-        if (!dbEntry) return { ok: false, message: 'File ZIP tidak mengandung database (.db)' }
+        // Baca ZIP pakai native Node.js - extract file .db
+        const zlib    = require('zlib')
+        const zipBuf  = fs.readFileSync(backupPath)
+        // Cari EOCD
+        let eocdOff = -1
+        for (let i = zipBuf.length - 22; i >= 0; i--) {
+          if (zipBuf.readUInt32LE(i) === 0x06054b50) { eocdOff = i; break }
+        }
+        if (eocdOff < 0) return { ok: false, message: 'File ZIP tidak valid' }
+        const cdCount  = zipBuf.readUInt16LE(eocdOff + 8)
+        let   cdOffset = zipBuf.readUInt32LE(eocdOff + 16)
+        let   dbBuf    = null
+        for (let i = 0; i < cdCount; i++) {
+          if (zipBuf.readUInt32LE(cdOffset) !== 0x02014b50) break
+          const nameLen  = zipBuf.readUInt16LE(cdOffset + 28)
+          const extraLen = zipBuf.readUInt16LE(cdOffset + 30)
+          const commLen  = zipBuf.readUInt16LE(cdOffset + 32)
+          const entryName = zipBuf.slice(cdOffset + 46, cdOffset + 46 + nameLen).toString('utf8')
+          const lhOffset  = zipBuf.readUInt32LE(cdOffset + 42)
+          const compSize  = zipBuf.readUInt32LE(cdOffset + 20)
+          const uncompSize = zipBuf.readUInt32LE(cdOffset + 24)
+          const method    = zipBuf.readUInt16LE(cdOffset + 10)
+          if (entryName.endsWith('.db')) {
+            // Baca dari local file header
+            const lhNameLen  = zipBuf.readUInt16LE(lhOffset + 26)
+            const lhExtraLen = zipBuf.readUInt16LE(lhOffset + 28)
+            const dataStart  = lhOffset + 30 + lhNameLen + lhExtraLen
+            const compData   = zipBuf.slice(dataStart, dataStart + compSize)
+            dbBuf = method === 8
+              ? zlib.inflateRawSync(compData)
+              : compData
+            break
+          }
+          cdOffset += 46 + nameLen + extraLen + commLen
+        }
+        if (!dbBuf) return { ok: false, message: 'File ZIP tidak mengandung database (.db)' }
         const tmpRestore = path.join(app.getPath('temp'), 'sim_restore_tmp.db')
-        zip.extractEntryTo(dbEntry, path.dirname(tmpRestore), false, true)
-        backupPath = path.join(path.dirname(tmpRestore), dbEntry.entryName)
+        fs.writeFileSync(tmpRestore, dbBuf)
+        backupPath = tmpRestore
       }
       db.close()
       fs.copyFileSync(backupPath, dbPath)
+      if (backupPath.includes('sim_restore_tmp')) {
+        try { fs.unlinkSync(backupPath) } catch {}
+      }
       const Database = require('better-sqlite3')
       db = new Database(dbPath)
       db.pragma('journal_mode = WAL')
       db.pragma('foreign_keys = ON')
       return { ok: true }
-    } catch (e) { return { ok: false, message: e.message } }
+    } catch (e) { return { ok: false, message: String(e instanceof Error ? e.message : e) } }
   })
 
   // Misc
