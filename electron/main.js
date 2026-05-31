@@ -114,6 +114,8 @@ function initDB() {
     judul_skl: 'TEXT', paragraf_pembuka_skl: 'TEXT', paragraf_penutup_skl: 'TEXT',
     kop_font_nama: 'REAL', kop_font_yayasan: 'REAL', kop_font_jenis: 'REAL',
     kop_show_logo_kanan: 'INTEGER', kop_font_family: 'TEXT',
+    pdf_margin_left: 'REAL', pdf_margin_right: 'REAL',
+    pdf_margin_top: 'REAL', pdf_margin_bottom: 'REAL',
     judul_sk_kelulusan: 'TEXT', paragraf_pembuka_sk: 'TEXT', paragraf_penutup_sk: 'TEXT',
     alamat2: 'TEXT', no_skkb: 'TEXT'
   }
@@ -162,7 +164,8 @@ function initDB() {
 // ── Helper: get semua nilai siswa ─────────────────────────────────────────
 function getAllNilai() {
   const rows = db.prepare('SELECT * FROM nilai').all()
-  const map = {}
+  const s    = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
+  const map  = { _br: s?.bobot_raport ?? 60, _bu: s?.bobot_ujian ?? 40 }
   rows.forEach(r => {
     if (!map[r.siswa_id]) map[r.siswa_id] = []
     map[r.siswa_id].push(r)
@@ -359,15 +362,19 @@ function registerIPC() {
         return { mapel_id: m.id, nama: m.nama, rata_raport: rataR, nilai_ujian: ujVal, nilai_ijazah: nij }
       })
       const cnt = cntNij
+      const totalMapel = mapelIds.length
       return {
         id:          sw.id,
-        nama:        sw.nama,
-        nisn:        sw.nisn,
-        kelas:       sw.kelas,
+        nama:        sw.nama || '',
+        nisn:        sw.nisn || '',
+        kelas:       sw.kelas || '',
         rata_raport: cnt > 0 ? Math.round(sumRap/cnt*100)/100 : null,
         nilai_ujian: cnt > 0 ? Math.round(sumUji/cnt*100)/100 : null,
-        nilai_ijazah:cnt > 0 ? Math.round(sumNij/cnt*100)/100 : null,
-        lengkap:     cnt === mapelIds.length && mapelIds.length > 0,
+        // Nilai ijazah ditampilkan meski tidak semua mapel lengkap (pakai yg ada)
+        nilai_ijazah: cnt > 0 ? Math.round(sumNij/cnt*100)/100 : null,
+        lengkap:     cnt === totalMapel && totalMapel > 0,
+        mapel_isi:   cnt,
+        mapel_total: totalMapel,
         per_mapel:   perMapel,
       }
     })
