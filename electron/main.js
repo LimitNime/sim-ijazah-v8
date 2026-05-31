@@ -116,6 +116,7 @@ function initDB() {
     kop_show_logo_kanan: 'INTEGER', kop_font_family: 'TEXT',
     pdf_margin_left: 'REAL', pdf_margin_right: 'REAL',
     pdf_margin_top: 'REAL', pdf_margin_bottom: 'REAL',
+    pdf_ukuran: 'TEXT',
     judul_sk_kelulusan: 'TEXT', paragraf_pembuka_sk: 'TEXT', paragraf_penutup_sk: 'TEXT',
     alamat2: 'TEXT', no_skkb: 'TEXT'
   }
