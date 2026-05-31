@@ -39,6 +39,19 @@ export interface Sekolah {
   jenis_sekolah?: string
   alamat2?: string
   no_skkb?: string
+  // Kop surat
+  kop_font_family?: string
+  kop_font_nama?: number
+  kop_font_yayasan?: number
+  kop_font_jenis?: number
+  kop_show_logo_kanan?: number
+  // SKL
+  judul_skl?: string
+  paragraf_pembuka_skl?: string
+  paragraf_penutup_skl?: string
+  judul_sk_kelulusan?: string
+  paragraf_pembuka_sk?: string
+  paragraf_penutup_sk?: string
 }
 
 export interface Semester {
@@ -109,6 +122,18 @@ export interface Angkatan {
   keterangan: string
   is_aktif: number
   jml_siswa?: number
+}
+
+export interface RankingRow {
+  id: number
+  nama: string
+  nisn: string
+  kelas: string
+  rata_raport: number | null
+  nilai_ujian: number | null
+  nilai_ijazah: number | null
+  ranking: number | null
+  lengkap: boolean
 }
 
 export interface RekapRow {
