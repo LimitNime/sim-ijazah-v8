@@ -66,9 +66,10 @@ export const nomorSuratApi = {
   saveAll: (data: any)    => api?.nomorSurat?.saveAll(data),
 }
 export const exportApi = {
-  excelAngkatan: (angkatan_id: number | null) => api?.export?.excelAngkatan(angkatan_id),
+  excelAngkatan: ()                           => api?.export?.excelAngkatan(),
   excelSiswa:    (siswa_id: number)           => api?.export?.excelSiswa(siswa_id),
   excelRekap:    ()                           => api?.export?.excelRekap(),
+  excelRanking:  ()                           => api?.export?.excelRanking(),
 }
 export const pdfApi = {
   skl:         (angkatan_id?: number|null) => api?.pdf.skl(angkatan_id ?? null),
