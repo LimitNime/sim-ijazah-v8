@@ -42,7 +42,7 @@ Button.displayName = 'Button'
 
 // ── Input ─────────────────────────────────────────────────────────────────
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string
+  label?: React.ReactNode
   error?: string
   hint?: string
 }
@@ -69,7 +69,7 @@ Input.displayName = 'Input'
 
 // ── Select ────────────────────────────────────────────────────────────────
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string
+  label?: React.ReactNode
   error?: string
   options: { value: string | number; label: string }[]
 }
@@ -97,7 +97,7 @@ Select.displayName = 'Select'
 
 // ── Textarea ──────────────────────────────────────────────────────────────
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label?: string
+  label?: React.ReactNode
   error?: string
 }
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
@@ -172,7 +172,7 @@ interface StatCardProps {
   value: string | number
   icon: React.ReactNode
   color?: string
-  sub?: string
+  sub?: React.ReactNode
 }
 export function StatCard({ label, value, icon, color = 'text-blue-600', sub }: StatCardProps) {
   return (
