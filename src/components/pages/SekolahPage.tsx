@@ -86,6 +86,25 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Info lokasi database */}
+      <div className="bg-slate-800 text-white rounded-xl px-4 py-3 text-xs flex items-start gap-3">
+        <span className="text-2xl">🗄️</span>
+        <div>
+          <p className="font-bold text-sm mb-1">Lokasi Data Aplikasi</p>
+          <p className="text-slate-300 font-mono break-all">
+            {typeof window !== 'undefined' && (window as any).electron
+              ? '%APPDATA%\\SIM Ijazah\\'
+              : 'Buka aplikasi desktop untuk melihat lokasi'}
+          </p>
+          <p className="text-slate-400 mt-1">
+            Database: <span className="font-mono text-slate-200">sim_ijazah.db</span>
+            &nbsp;·&nbsp; Output PDF/Excel: <span className="font-mono text-slate-200">output\</span>
+          </p>
+          <p className="text-slate-400 mt-0.5">
+            Akses cepat: tekan <kbd className="bg-slate-700 px-1 rounded">Win+R</kbd> lalu ketik <kbd className="bg-slate-700 px-1 rounded font-mono">%APPDATA%\\SIM Ijazah</kbd>
+          </p>
+        </div>
+      </div>
       <PageHeader title="Data Sekolah" subtitle="Profil sekolah, kop surat, dan konfigurasi nilai"
         actions={<Button icon={<Save className="w-4 h-4"/>} loading={saving} onClick={save}>Simpan</Button>} />
 
@@ -150,6 +169,20 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
               Tampilkan logo kanan (Kemdikbud/Kemenag) di kop surat
               {!(form.logo_kemdikbud || form.logo_garuda) && <span className="ml-2 text-xs text-amber-500">(upload logo Kemdikbud di bagian Logo dulu)</span>}
             </label>
+          </div>
+
+          {/* Ukuran kertas */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Ukuran Kertas Dokumen</label>
+            <select
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+              value={(form as any).pdf_ukuran || 'A4'}
+              onChange={e => set('pdf_ukuran' as any, e.target.value)}
+            >
+              <option value="A4">A4 — 210 × 297 mm (standar internasional)</option>
+              <option value="F4">F4 / Folio — 215 × 330 mm (standar Indonesia)</option>
+            </select>
+            <p className="text-xs text-gray-400">Berlaku untuk semua dokumen PDF yang dicetak</p>
           </div>
 
           {/* Pilih jenis font */}
@@ -339,26 +372,41 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
       <SectionCard title="Margin Dokumen PDF">
         <div className="flex flex-col gap-4">
           <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-            Satuan: <strong>pt</strong> (1 cm ≈ 28.3 pt). Default kiri/kanan = 45pt (~1.6cm), atas = 18pt (~0.6cm).
+            Satuan: <strong>cm</strong>. Nilai disimpan dalam cm dan otomatis dikonversi ke pt saat cetak (1 cm = 28.35 pt).
             Berlaku untuk semua dokumen PDF (SKL, DKN, Nilai Ijazah, dll).
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {([
-              { key: 'pdf_margin_left',   label: 'Margin Kiri (pt)',  default: 45 },
-              { key: 'pdf_margin_right',  label: 'Margin Kanan (pt)', default: 45 },
-              { key: 'pdf_margin_top',    label: 'Margin Atas (pt)',  default: 18 },
-              { key: 'pdf_margin_bottom', label: 'Margin Bawah (pt)', default: 20 },
-            ] as const).map(({ key, label, default: def }) => (
-              <div key={key} className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-                <input type="number" min="0" max="200" step="1"
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  value={(form as any)[key] ?? def}
-                  onChange={e => set(key as any, parseFloat(e.target.value))}
-                />
-                <p className="text-xs text-gray-400">Default: {def}pt</p>
-              </div>
-            ))}
+              { key: 'pdf_margin_left',   label: 'Margin Kiri',   def: 1.6 },
+              { key: 'pdf_margin_right',  label: 'Margin Kanan',  def: 1.6 },
+              { key: 'pdf_margin_top',    label: 'Margin Atas',   def: 0.6 },
+              { key: 'pdf_margin_bottom', label: 'Margin Bawah',  def: 0.7 },
+            ] as const).map(({ key, label, def }) => {
+              // Nilai di DB disimpan dalam pt (legacy), tampilkan dalam cm
+              const ptVal  = (form as any)[key]
+              const cmVal  = ptVal != null ? Math.round(ptVal / 28.35 * 100) / 100 : def
+              return (
+                <div key={key} className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+                  <div className="relative">
+                    <input
+                      type="number" min="0" max="10" step="0.1"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      value={cmVal}
+                      onChange={e => {
+                        const cm = parseFloat(e.target.value) || 0
+                        set(key as any, Math.round(cm * 28.35 * 100) / 100)
+                      }}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">cm</span>
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    Default: {def} cm &nbsp;·&nbsp;
+                    {Math.round(((form as any)[key] ?? Math.round(def * 28.35)) * 10) / 10} pt
+                  </p>
+                </div>
+              )
+            })}
           </div>
           <div className="flex justify-end">
             <Button icon={<Save className="w-4 h-4"/>} loading={saving} onClick={save}>Simpan</Button>
