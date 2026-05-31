@@ -50,6 +50,7 @@ export const nilaiApi = {
   rekapAngkatan:   (id:number)  => api?.nilai.rekapAngkatan(id) ?? [],
   importTemplate:  ()           => api?.nilai.importTemplate(),
   importNilai:     ()           => api?.nilai.importNilai(),
+  ranking:         (): Promise<any[]> => api?.nilai.ranking() ?? Promise.resolve([]),
 }
 export const angkatanApi = {
   list:        ()                        => api?.angkatan.list() ?? [],
