@@ -121,6 +121,18 @@ function getFont(familyKey, style) {
 const FONT_LIST = Object.keys(FONT_CATALOG)
 
 // Apply font family ke doc, return {B, R, I, BI} shorthand
+// ── Ukuran kertas ──────────────────────────────────────────────────────────
+// A4: 210x297mm, F4/Folio: 215x330mm (standar Indonesia)
+const PAPER = {
+  A4:  [595.28, 841.89],   // 210x297mm
+  F4:  [609.45, 935.43],   // 215x330mm (Folio)
+}
+function getPaperSize(s, landscape) {
+  const key  = (s.pdf_ukuran || 'A4').toUpperCase()
+  const size = PAPER[key] || PAPER['A4']
+  return landscape ? [size[1], size[0]] : size
+}
+
 function fontSetup(doc, s) {
   const ff = registerFonts(doc, s.kop_font_family)
   return {
@@ -269,7 +281,7 @@ function drawKopResmi(doc, s, ml, cw) {
 // ══════════════════════════════════════════════════════════════════════════
 function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId }) {
   const PDFDocument = require('pdfkit')
-  const A4 = [595.28, 841.89]  // A4 portrait 210x297mm
+  const A4 = getPaperSize(s, false)
   const doc = new PDFDocument({ size: A4, margin: 0 })
   const filePath = path.join(outputPath, 'SKL_Kelulusan.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -520,7 +532,7 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
 
 function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const PDFDocument = require('pdfkit')
-  const A4 = [595.28, 841.89]  // A4 portrait 210x297mm
+  const A4 = getPaperSize(s, false)
   const doc = new PDFDocument({ size: A4, margin: 0 })
   const filePath = path.join(outputPath, 'Nilai_Ijazah_Semua.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -712,7 +724,7 @@ function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nil
 function generateDKN(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const PDFDocument = require('pdfkit')
   // A4 landscape = 297mm x 210mm → dalam pt
-  const A4L = [841.89, 595.28]  // A4 landscape 297x210mm
+  const A4L = getPaperSize(s, true)
   const doc = new PDFDocument({ size: A4L, margin: 0 })
   const filePath = path.join(outputPath, 'DKN_Lengkap.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -893,7 +905,7 @@ function generateDKN(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
 
 function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mapelList, semList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const { Workbook } = require('./excel-builder')
-  const path         = require('path')
+  const path_mod     = require('path')
 
   const raportSems = semList.filter(s => !s.is_ujian)
   const ujianSem   = semList.find(s => s.is_ujian)
@@ -904,168 +916,134 @@ function exportExcelAngkatan(outputPath, { sekolah: s, angkatan, siswaList, mape
 
   const wb = new Workbook()
 
-  // ── Sheet 1: Rekap Nilai Ijazah per Siswa ────────────────────────────
-  // Isi kolom per mapel = Nilai Ijazah (sudah diolah)
-  const ws1 = wb.addSheet('Rekap Nilai Ijazah')
+  // ── Sheet 1: Nilai Ijazah (1 siswa 1 baris, kolom per mapel) ─────────
+  const ws1 = wb.addSheet('Nilai Ijazah')
   ws1.setColWidths([5, 32, 14, ...mapelList.map(() => 12), 14])
-  ws1.freezePane(1, 3)
-  // Baris keterangan rumus
+  ws1.freezePane(2, 3)
+  // Baris info
   ws1.mergeCell(1, 1, 1, 3 + mapelList.length + 1)
   ws1.addRow(
-    [`Nilai Ijazah = (Rata Raport × ${br}% + Nilai Ujian × ${bu}%) / ${totalB}   |   Angkatan: ${angkatan?.nama || 'Semua'}`],
-    'subheader', 20
+    [`Nilai Ijazah = (Rata Raport × ${br}%) + (Nilai Ujian × ${bu}%)   |   Angkatan: ${angkatan?.nama || 'Semua'}`],
+    'subheader', 18
   )
+  // Header
   ws1.addRow(
     ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama), 'Rata NIJ'],
-    'header', 40
+    'header', 36
   )
-
+  // Data per siswa
   siswaList.forEach((sw, ri) => {
-    let jumlah = 0, cnt = 0
-    const mapelVals = mapelList.map(m => {
+    let sumNij = 0, cntNij = 0
+    const nijCells = mapelList.map(m => {
       const raps  = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
-      const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
+      const rataR = raps.length === raportSems.length && raps.length > 0
+        ? raps.reduce((a,b) => a + parseFloat(b), 0) / raps.length : null
       const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal = ujN?.nilai_ujian ?? null
-      const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
-      if (nij != null) { jumlah += nij; cnt++ }
+      const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
+      const nij   = rataR != null && ujVal != null
+        ? parseFloat(((rataR*br + ujVal*bu)/totalB).toFixed(2)) : null
+      if (nij != null) { sumNij += nij; cntNij++ }
       return nij ?? ''
     })
-    const avg = cnt > 0 ? parseFloat((jumlah / cnt).toFixed(2)) : ''
+    const avg = cntNij > 0 ? parseFloat((sumNij/cntNij).toFixed(2)) : ''
     ws1.addRow(
-      [ri + 1, sw.nama || '', sw.nisn || '', ...mapelVals, avg],
-      ['data_l', 'data_l', 'data', ...mapelList.map(() => 'data'), 'data'],
+      [ri+1, sw.nama||'', sw.nisn||'', ...nijCells, avg],
+      ['data_l','data_l','data', ...mapelList.map(()=>'data'), 'data'],
       16, ri
     )
   })
 
-  // ── Sheet per Mata Pelajaran ─────────────────────────────────────────
-  // Kolom: No | Nama | NISN | Sem1 | Sem2... | Rata Raport | Nilai Raport(br%) | Nilai Ujian | Nilai Ujian(bu%) | Nilai Ijazah
-  const semLabels = raportSems.map(sem => sem.label)
-  const pctR = `Bobot Raport (${br}%)`
-  const pctU = `Bobot Ujian (${bu}%)`
+  // ── Sheet 2: Rekap Nilai (1 siswa 1 baris, kolom Rata Sem1..N, RataRap, US, NIJ) ─
+  const ws2 = wb.addSheet('Rekap Nilai')
+  const semLabels = raportSems.map(s => s.label)
+  ws2.setColWidths([5, 32, 14, ...raportSems.map(()=>12), 14, 13, 14])
+  ws2.freezePane(1, 3)
+  ws2.addRow(
+    ['No', 'Nama Siswa', 'NISN',
+     ...semLabels,
+     'Rata Raport', 'Nilai Ujian', 'Nilai Ijazah'],
+    'header', 36
+  )
+  siswaList.forEach((sw, ri) => {
+    // Per siswa: rata semua mapel per semester
+    const rataPerSem = raportSems.map(sem => {
+      const vals = mapelList.map(m => {
+        const n = getNilai(sw.id, m.id, sem.id)
+        return n?.nilai_p != null ? parseFloat(n.nilai_p) : null
+      }).filter(v => v !== null)
+      return vals.length > 0 ? parseFloat((vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2)) : null
+    })
+    // Rata raport keseluruhan (rata dari semua nilai_p semua mapel semua sem raport)
+    const allRap = mapelList.flatMap(m =>
+      raportSems.map(sem => {
+        const n = getNilai(sw.id, m.id, sem.id)
+        return n?.nilai_p != null ? parseFloat(n.nilai_p) : null
+      })
+    ).filter(v => v !== null)
+    const rataRap = allRap.length > 0 ? parseFloat((allRap.reduce((a,b)=>a+b,0)/allRap.length).toFixed(2)) : null
+    // Rata nilai ujian semua mapel
+    const allUji = mapelList.map(m => {
+      const n = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
+      return n?.nilai_ujian != null ? parseFloat(n.nilai_ujian) : null
+    }).filter(v => v !== null)
+    const rataUji = allUji.length > 0 ? parseFloat((allUji.reduce((a,b)=>a+b,0)/allUji.length).toFixed(2)) : null
+    // NIJ
+    let sumNij=0, cntNij=0
+    mapelList.forEach(m => {
+      const raps = raportSems.map(sem=>getNilai(sw.id,m.id,sem.id)?.nilai_p).filter(v=>v!=null)
+      const rataR = raps.length===raportSems.length&&raps.length>0 ? raps.reduce((a,b)=>a+parseFloat(b),0)/raps.length : null
+      const ujN  = ujianSem ? getNilai(sw.id,m.id,ujianSem.id) : null
+      const ujV  = ujN?.nilai_ujian!=null ? parseFloat(ujN.nilai_ujian) : null
+      const nij  = rataR!=null&&ujV!=null ? (rataR*br+ujV*bu)/totalB : null
+      if (nij!=null){sumNij+=nij;cntNij++}
+    })
+    const avgNij = cntNij>0 ? parseFloat((sumNij/cntNij).toFixed(2)) : null
+    ws2.addRow(
+      [ri+1, sw.nama||'', sw.nisn||'',
+       ...rataPerSem.map(v => v??''),
+       rataRap??'', rataUji??'', avgNij??''],
+      ['data_l','data_l','data',...raportSems.map(()=>'data'),'data','data','data'],
+      16, ri
+    )
+  })
+
+  // ── Sheet 3: Detail per Mata Pelajaran ───────────────────────────────
   mapelList.forEach(m => {
     const wsM = wb.addSheet(m.nama.slice(0, 31))
-    wsM.setColWidths([5, 32, 14, ...semLabels.map(() => 10), 13, 15, 13, 15, 14])
+    const pctR = `Bobot (${br}%)`
+    const pctU = `Bobot (${bu}%)`
+    wsM.setColWidths([5, 32, 14, ...raportSems.map(()=>10), 13, 15, 13, 15, 14])
     wsM.freezePane(1, 3)
     wsM.addRow(
-      ['No', 'Nama Siswa', 'NISN', ...semLabels, 'Rata Raport', pctR, 'Nilai Ujian', pctU, 'Nilai Ijazah'],
-      'header', 40
+      ['No','Nama Siswa','NISN',...semLabels,'Rata Raport',pctR,'Nilai Ujian',pctU,'Nilai Ijazah'],
+      'header', 36
     )
     siswaList.forEach((sw, ri) => {
       const rapVals = []
       const semCells = raportSems.map(sem => {
         const n = getNilai(sw.id, m.id, sem.id)
         const v = n?.nilai_p != null ? parseFloat(n.nilai_p) : null
-        if (v != null) rapVals.push(v)
-        return v ?? ''
+        if (v!=null) rapVals.push(v)
+        return v??''
       })
+      const rataR  = rapVals.length>0 ? rapVals.reduce((a,b)=>a+b,0)/rapVals.length : null
       const ujN    = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal  = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
-      const rataR  = rapVals.length === raportSems.length ? rapVals.reduce((a, b) => a + b, 0) / rapVals.length : null
-      // Nilai raport setelah dikalikan bobot
-      const nilRap = rataR != null ? parseFloat((rataR * br / totalB).toFixed(2)) : null
-      // Nilai ujian setelah dikalikan bobot
-      const nilUji = ujVal != null ? parseFloat((ujVal * bu / totalB).toFixed(2)) : null
-      // Nilai ijazah = nilRap + nilUji
-      const nij    = nilRap != null && nilUji != null ? parseFloat((nilRap + nilUji).toFixed(2)) : null
+      const ujVal  = ujN?.nilai_ujian!=null ? parseFloat(ujN.nilai_ujian) : null
+      const nilRap = rataR!=null ? parseFloat((rataR*br/totalB).toFixed(2)) : null
+      const nilUji = ujVal!=null ? parseFloat((ujVal*bu/totalB).toFixed(2)) : null
+      const nij    = nilRap!=null&&nilUji!=null ? parseFloat((nilRap+nilUji).toFixed(2)) : null
       wsM.addRow(
-        [ri + 1, sw.nama || '', sw.nisn || '',
-         ...semCells,
-         rataR  != null ? parseFloat(rataR.toFixed(2))  : '',
-         nilRap != null ? nilRap : '',
-         ujVal  != null ? ujVal  : '',
-         nilUji != null ? nilUji : '',
-         nij    != null ? nij    : ''],
-        ['data_l', 'data_l', 'data', ...semLabels.map(() => 'data'), 'data', 'data', 'data', 'data', 'data'],
+        [ri+1, sw.nama||'', sw.nisn||'', ...semCells,
+         rataR!=null?parseFloat(rataR.toFixed(2)):'',
+         nilRap??'', ujVal??'', nilUji??'', nij??''],
+        ['data_l','data_l','data',...raportSems.map(()=>'data'),'data','data','data','data','data'],
         16, ri
       )
     })
   })
 
-  // ── Sheet Rekap Nilai per Siswa (semua semester + rata + ujian + ijazah) ─
-  // Per siswa: satu baris per mapel, kolom per semester raport + rata + ujian + nij
-  const wsRekap = wb.addSheet('Rekap Nilai Siswa')
-  const semColWidths = [5, 32, 14, ...raportSems.map(() => 11), 13, 13, 14]
-  wsRekap.setColWidths(semColWidths)
-  wsRekap.freezePane(1, 3)
-  // Header
-  wsRekap.addRow(
-    ['No', 'Mata Pelajaran', 'NISN Siswa',
-     ...raportSems.map(s => s.label),
-     'Rata Raport', 'Nilai Ujian', 'Nilai Ijazah'],
-    'header', 32
-  )
-  // Satu blok baris per siswa, dipisah baris nama siswa sebagai subheader
-  let rowIdx = 0
-  siswaList.forEach((sw) => {
-    // Baris nama siswa (subheader)
-    wsRekap.addRow(
-      [`${sw.nama || ''}  (${sw.nisn || '—'})`, '', '', ...raportSems.map(() => ''), '', '', ''],
-      'subheader', 18
-    )
-    mapelList.forEach((m, mi) => {
-      const rapVals = []
-      const semCells = raportSems.map(sem => {
-        const n = getNilai(sw.id, m.id, sem.id)
-        const v = n?.nilai_p != null ? parseFloat(n.nilai_p) : null
-        if (v != null) rapVals.push(v)
-        return v ?? ''
-      })
-      const rataR = rapVals.length > 0 ? rapVals.reduce((a,b)=>a+b,0)/rapVals.length : null
-      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal = ujN?.nilai_ujian != null ? parseFloat(ujN.nilai_ujian) : null
-      const nij   = rataR != null && ujVal != null
-        ? parseFloat(((rataR*br + ujVal*bu)/totalB).toFixed(2)) : null
-      wsRekap.addRow(
-        [mi+1, m.nama, '',
-         ...semCells,
-         rataR != null ? parseFloat(rataR.toFixed(2)) : '',
-         ujVal ?? '',
-         nij ?? ''],
-        ['data_l','data_l','data',...raportSems.map(()=>'data'),'data','data','data'],
-        15, rowIdx++
-      )
-    })
-  })
-
-  // ── Sheet Rekap Nilai Ijazah (semua mapel per siswa) ─────────────────
-  // Kolom: No | Nama | NISN | Mapel1 NIJ | Mapel2 NIJ | ... | Rata NIJ
-  const wsN = wb.addSheet('Nilai Ijazah')
-  wsN.setColWidths([5, 32, 14, ...mapelList.map(() => 12), 14])
-  wsN.freezePane(1, 3)
-  // Baris sub-header: keterangan rumus
-  wsN.mergeCell(1, 1, 1, 3 + mapelList.length + 1)
-  wsN.addRow(
-    [`Nilai Ijazah = (Rata Raport × ${br}% + Nilai Ujian × ${bu}%) / ${totalB}`],
-    'subheader', 20
-  )
-  wsN.addRow(
-    ['No', 'Nama Siswa', 'NISN', ...mapelList.map(m => m.nama.slice(0, 20)), 'Rata NIJ'],
-    'header', 36
-  )
-
-  siswaList.forEach((sw, ri) => {
-    let sumNij = 0, cntNij = 0
-    const nijCells = mapelList.map(m => {
-      const raps  = raportSems.map(sem => getNilai(sw.id, m.id, sem.id)?.nilai_p).filter(v => v != null)
-      const rataR = raps.length === raportSems.length ? raps.reduce((a, b) => a + b, 0) / raps.length : null
-      const ujN   = ujianSem ? getNilai(sw.id, m.id, ujianSem.id) : null
-      const ujVal = ujN?.nilai_ujian ?? null
-      const nij   = rataR != null && ujVal != null ? parseFloat(((rataR * br + ujVal * bu) / totalB).toFixed(2)) : null
-      if (nij != null) { sumNij += nij; cntNij++ }
-      return nij ?? ''
-    })
-    const avgNij = cntNij > 0 ? parseFloat((sumNij / cntNij).toFixed(2)) : ''
-    wsN.addRow(
-      [ri + 1, sw.nama || '', sw.nisn || '', ...nijCells, avgNij],
-      ['data_l', 'data_l', 'data', ...mapelList.map(() => 'data'), 'data'],
-      16, ri
-    )
-  })
-
-  const fname    = `Nilai_Angkatan_${(angkatan?.nama || 'Semua').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`
-  const filePath = path.join(outputPath, fname)
+  const fname    = `Nilai_Angkatan_${(angkatan?.nama||'Semua').replace(/[^a-zA-Z0-9]/g,'_')}_${Date.now()}.xlsx`
+  const filePath = path_mod.join(outputPath, fname)
   return wb.writeFile(filePath).then(() => filePath)
 }
 
@@ -1358,7 +1336,7 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
 function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, ujianSemId, raportSemIds, br, bu, totalB }) {
   const PDFDocument = require('pdfkit')
   // A4 = 210mm x 297mm → dalam pt
-  const A4 = [595.28, 841.89]
+  const A4 = getPaperSize(s, false)
   const doc = new PDFDocument({ size: A4, margin: 0 })
   const filePath = path.join(outputPath, 'Transkrip_Nilai_Semua.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -1556,7 +1534,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
 
 function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
   const PDFDocument = require('pdfkit')
-  const A4sk = [595.28, 841.89]
+  const A4sk = getPaperSize(s, false)
   const doc = new PDFDocument({ size: A4sk, margin: 0 })
   const filePath = path.join(outputPath, 'SK_Penetapan_Kelulusan.pdf')
   doc.pipe(fs.createWriteStream(filePath))
@@ -1765,7 +1743,7 @@ function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
 function generateSKKB(outputPath, { sekolah: s, siswaList }) {
   const PDFDocument = require('pdfkit')
   // A4 = 210mm x 297mm → dalam pt (1mm = 2.8346pt)
-  const A4 = [595.28, 841.89]
+  const A4 = getPaperSize(s, false)
   const doc = new PDFDocument({ size: A4, margin: 0 })
   const filePath = path.join(outputPath, 'SKKB_Semua.pdf')
   doc.pipe(fs.createWriteStream(filePath))
