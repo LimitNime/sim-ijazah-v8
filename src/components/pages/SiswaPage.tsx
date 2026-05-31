@@ -35,9 +35,10 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
 
   // Generate No SKL
   const [genModal, setGenModal]   = useState(false)
-  const [genOpts, setGenOpts]     = useState({ kode_sekolah:'', bulan_romawi: BULAN_ROMAWI[new Date().getMonth()], tahun: String(new Date().getFullYear()), mulai_dari:'1' })
+  const [genOpts, setGenOpts]     = useState({ pola: '422/{no_urut}/SKL/{bulan}/{tahun}', mulai_dari: '1' })
   const [genPreview, setGenPreview] = useState('')
   const [genLoading, setGenLoading] = useState(false)
+  const [editSkl, setEditSkl]       = useState<{id:number, val:string} | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,22 +48,22 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
-    sekolahApi.get().then(s => {
+    sekolahApi.get().then((s: any) => {
       setSekolah(s)
-      if (s?.nama) {
-        const kata = (s.nama||'').split(' ')
-        const kode = kata.slice(0,3).map((k:string)=>k.replace(/[^A-Z0-9]/gi,'')).join('.').toUpperCase()
-        setGenOpts(o => ({ ...o, kode_sekolah: o.kode_sekolah||kode }))
-      }
+      // sekolah loaded
     })
   }, [])
 
   useEffect(() => {
     const jenjang = sekolah?.jenjang || 'MI'
-    const kodeJ = KODE_JENJANG[jenjang] || '421.2'
-    const no = String(parseInt(genOpts.mulai_dari)||1).padStart(3,'0')
-    setGenPreview(`${kodeJ}/${no}/${genOpts.kode_sekolah||'...'}/  ${genOpts.bulan_romawi}/${genOpts.tahun}`)
-  }, [genOpts, sekolah])
+    const BULAN_ROM = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+    const bulan = BULAN_ROM[new Date().getMonth()]
+    const tahun = String(new Date().getFullYear())
+    const no    = String(parseInt(genOpts.mulai_dari)||1).padStart(3,'0')
+    const prev  = (genOpts.pola || '422/{no_urut}/SKL/{bulan}/{tahun}')
+      .replace(/{no_urut}/g, no).replace(/{bulan}/g, bulan).replace(/{tahun}/g, tahun)
+    setGenPreview(prev)
+  }, [genOpts])
 
   const stats = {
     total: data.length,
@@ -119,6 +120,14 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
     finally { setGenLoading(false) }
   }
 
+  const handleSaveEditSkl = async () => {
+    if (!editSkl) return
+    await siswaApi.updateNoSkl(editSkl.id, editSkl.val)
+    showToast('No SKL disimpan')
+    setEditSkl(null)
+    load()
+  }
+
   const handleImportExcel = async () => {
     setImportLoading(true)
     try {
@@ -161,10 +170,34 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
       )},
     { key:'agama', header:'Agama', width:'80px',
       render:(r:Siswa) => <span className="text-xs text-gray-500">{r.agama||'-'}</span> },
-    { key:'no_skl', header:'No SKL', width:'160px',
-      render:(r:Siswa) => r.no_skl
-        ? <span className="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{r.no_skl}</span>
-        : <span className="text-xs text-gray-400 italic">Belum</span> },
+    { key:'no_skl', header:'No SKL', width:'200px',
+      render:(r:Siswa) => editSkl?.id === r.id
+        ? (
+          <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
+            <input
+              autoFocus
+              className="flex-1 border border-blue-300 rounded px-2 py-0.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={editSkl.val}
+              onChange={e => setEditSkl(s => s ? { ...s, val: e.target.value } : s)}
+              onKeyDown={e => { if (e.key==='Enter') handleSaveEditSkl(); if (e.key==='Escape') setEditSkl(null) }}
+            />
+            <button onClick={handleSaveEditSkl} className="text-emerald-600 font-bold text-xs px-1 hover:text-emerald-700">✓</button>
+            <button onClick={() => setEditSkl(null)} className="text-gray-400 text-xs px-1 hover:text-red-500">✕</button>
+          </div>
+        ) : (
+          <span
+            className="font-mono text-xs cursor-pointer group flex items-center gap-1"
+            title="Klik untuk edit"
+            onClick={e => { e.stopPropagation(); setEditSkl({ id: r.id, val: r.no_skl || '' }) }}
+          >
+            {r.no_skl
+              ? <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded group-hover:bg-blue-100">{r.no_skl}</span>
+              : <span className="text-gray-400 italic group-hover:text-blue-400">Klik untuk isi...</span>
+            }
+            <span className="opacity-0 group-hover:opacity-50 text-gray-400 text-[10px]">✏</span>
+          </span>
+        )
+    },
     { key:'jk', header:'JK', width:'48px', align:'center' as const,
       render:(r:Siswa) => <Badge color={r.jk==='Laki-laki'?'blue':'purple'}>{r.jk==='Laki-laki'?'L':'P'}</Badge> },
     { key:'jml_nilai', header:'Nilai', width:'64px', align:'center' as const,
@@ -220,33 +253,50 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
           </Button>
         </>}>
         <div className="flex flex-col gap-4">
-          <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-800">
-            <p className="font-semibold mb-1">Format No SKL:</p>
-            <p className="font-mono text-xs bg-white rounded px-2 py-1.5 border border-blue-200">
-              {KODE_JENJANG[sekolah?.jenjang||'MI']||'421.2'} / [No Urut] / [Kode Sekolah] / [Bulan Romawi] / [Tahun]
+          {/* Info variabel */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
+            <p className="font-semibold mb-1.5">Variabel yang bisa dipakai dalam pola:</p>
+            <div className="flex flex-wrap gap-2">
+              {['{no_urut}','  {bulan}','  {tahun}'].map(v => (
+                <code key={v} className="bg-white border border-blue-200 px-2 py-0.5 rounded font-mono">{v.trim()}</code>
+              ))}
+            </div>
+            <p className="mt-2 text-blue-600">
+              <strong>{'{bulan}'}</strong> = bulan romawi saat ini &nbsp;|&nbsp;
+              <strong>{'{tahun}'}</strong> = tahun saat ini &nbsp;|&nbsp;
+              <strong>{'{no_urut}'}</strong> = nomor urut 3 digit (001, 002, ...)
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <Input label="Kode Sekolah (singkatan)" value={genOpts.kode_sekolah}
-                onChange={e => setGenOpts(o => ({ ...o, kode_sekolah: e.target.value.toUpperCase() }))}
-                placeholder="Contoh: MI.CONTOH"/>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">Bulan</label>
-              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={genOpts.bulan_romawi} onChange={e => setGenOpts(o => ({ ...o, bulan_romawi: e.target.value }))}>
-                {BULAN_ROMAWI.map((b,i) => <option key={b} value={b}>{b} — {['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][i]}</option>)}
-              </select>
-            </div>
-            <Input label="Tahun" value={genOpts.tahun} onChange={e => setGenOpts(o => ({ ...o, tahun: e.target.value }))} placeholder="2025"/>
-            <Input label="Nomor Urut Mulai" type="number" min="1" value={genOpts.mulai_dari}
-              onChange={e => setGenOpts(o => ({ ...o, mulai_dari: e.target.value }))} placeholder="1"/>
+
+          {/* Pola bebas */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pola Nomor SKL</label>
+            <input
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={genOpts.pola}
+              onChange={e => setGenOpts(o => ({ ...o, pola: e.target.value }))}
+              placeholder="422/{no_urut}/SKL/{bulan}/{tahun}"
+            />
+            <p className="text-xs text-gray-400">Ketik bebas — tambahkan slash, titik, atau teks apapun sesuai format nomor sekolah Anda</p>
           </div>
+
+          <Input
+            label="Nomor Urut Mulai"
+            type="number" min="1"
+            value={genOpts.mulai_dari}
+            onChange={e => setGenOpts(o => ({ ...o, mulai_dari: e.target.value }))}
+            placeholder="1"
+          />
+
+          {/* Preview */}
           <div className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Preview Nomor Pertama:</p>
-            <p className="font-mono text-sm font-bold text-gray-800 bg-white border border-gray-200 rounded-lg px-3 py-2">{genPreview}</p>
-            <p className="text-xs text-amber-600 mt-2 bg-amber-50 rounded px-2 py-1.5">⚠️ Ini akan menimpa semua No SKL yang sudah ada.</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Preview Nomor Siswa Pertama:</p>
+            <p className="font-mono text-sm font-bold text-gray-800 bg-white border border-gray-200 rounded-lg px-3 py-2">
+              {genPreview || <span className="text-gray-400 italic">—</span>}
+            </p>
+            <p className="text-xs text-amber-600 mt-2 bg-amber-50 rounded px-2 py-1.5">
+              ⚠️ Ini akan menimpa semua No SKL yang sudah ada untuk {data.length} siswa.
+            </p>
           </div>
         </div>
       </Modal>
