@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   LayoutDashboard, School, Users, BookOpen, Settings,
   PenLine, Printer, GraduationCap, LogOut, ChevronRight,
-  BarChart2, Upload, FileSpreadsheet, Hash
+  BarChart2, Upload, FileSpreadsheet, Hash, Trophy
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '../../hooks/useAuth'
@@ -10,7 +10,7 @@ import { useAuth } from '../../hooks/useAuth'
 export type PageKey =
   | 'dashboard' | 'sekolah' | 'siswa' | 'mapel'
   | 'semester' | 'nilai' | 'rekap-nilai' | 'import-nilai'
-  | 'rekap-cetak' | 'angkatan' | 'penomoran-surat'
+  | 'rekap-cetak' | 'angkatan' | 'penomoran-surat' | 'ranking'
 
 interface NavItem {
   key: PageKey
@@ -28,6 +28,7 @@ const NAV: NavItem[] = [
   { key: 'angkatan',    label: 'Angkatan',           icon: <GraduationCap className="w-4 h-4" /> },
   { key: 'nilai',       label: 'Input Nilai',         icon: <PenLine className="w-4 h-4" />, group: 'NILAI' },
   { key: 'rekap-nilai', label: 'Rekap Nilai',         icon: <BarChart2 className="w-4 h-4" /> },
+  { key: 'ranking',     label: 'Ranking Siswa',       icon: <Trophy className="w-4 h-4" /> },
   { key: 'import-nilai',    label: 'Import Nilai',        icon: <Upload className="w-4 h-4" /> },
   { key: 'penomoran-surat', label: 'Penomoran Surat',     icon: <Hash className="w-4 h-4" /> },
   { key: 'rekap-cetak', label: 'Rekap & Cetak PDF',  icon: <Printer className="w-4 h-4" /> },
