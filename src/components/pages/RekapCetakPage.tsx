@@ -41,9 +41,9 @@ export function RekapCetakPage({ showToast }: { showToast: (msg: string, type?: 
     })(),
   }
 
-  const exportExcel = async (angkatan_id?: number | null) => {
+  const exportExcel = async () => {
     try {
-      const result = await exportApi.excelAngkatan(angkatan_id ?? null) as any
+      const result = await exportApi.excelAngkatan() as any
       if (result?.ok) showToast('Export Excel berhasil')
       else showToast(result?.error || result?.message || 'Gagal export', 'error')
     } catch (e: any) { showToast(`Gagal export: ${e.message}`, 'error') }
