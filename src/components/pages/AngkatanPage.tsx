@@ -35,7 +35,7 @@ export function AngkatanPage({ showToast }: { showToast: (msg: string, type?: an
   }, [])
 
   useEffect(() => { loadAngkatan() }, [loadAngkatan])
-  useEffect(() => { siswaApi.list().then(d => setAllSiswa(d || [])) }, [])
+  useEffect(() => { siswaApi.list().then((d: any) => setAllSiswa(d || [])) }, [])
 
   const onSelectAngkatan = (a: Angkatan) => {
     setSelAngkatan(a); setSelectedAnggota([])
@@ -98,7 +98,7 @@ export function AngkatanPage({ showToast }: { showToast: (msg: string, type?: an
     if (!selAngkatan) return
     setExporting(true)
     try {
-      const res = await exportApi.excelAngkatan(selAngkatan.id)
+      const res = await exportApi.excelAngkatan()
       if (res?.ok) showToast(`Export Excel berhasil: ${selAngkatan.nama}`)
       else showToast(res?.error || 'Gagal export', 'error')
     } catch { showToast('Fitur export hanya tersedia di desktop app', 'warning') }
