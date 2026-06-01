@@ -98,7 +98,7 @@ export function InputNilaiPage({ showToast, initialSiswaId }: { showToast: (msg:
       setLoading(false)
     })
     sekolahApi.get().then((sk: any) => setSekolah(sk))
-  }, [initialSiswaId])
+  }, [initialSiswaId, filterAngkatan])
 
   // Filter siswa by search
   const filteredSiswa = siswaList.filter(s =>
@@ -244,7 +244,7 @@ export function InputNilaiPage({ showToast, initialSiswaId }: { showToast: (msg:
             onChange={e => { setFilterAngkatan(e.target.value ? Number(e.target.value) : null); setSelSiswa(null) }}
           >
             <option value="">Semua Angkatan</option>
-            {angkatanList.map((a:any) => <option key={a.id} value={a.id}>{a.nama}{a.is_aktif?' ★':''}</option>)}
+            {angkatanList.map((a:any) => <option key={a.id} value={a.id}>{a.nama}</option>)}
           </select>
           <SearchBar value={q} onChange={setQ} placeholder="Cari siswa..." />
           <div className="card flex-1 overflow-y-auto divide-y divide-gray-50">
