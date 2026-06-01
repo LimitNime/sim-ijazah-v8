@@ -44,17 +44,19 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { setData(await siswaApi.list(q) || []) }
+    try {
+      const rows = filterAngkatan
+        ? await angkatanApi.getSiswa(filterAngkatan)
+        : await siswaApi.list(q)
+      setData(rows || [])
+    }
     finally { setLoading(false) }
-  }, [q])
+  }, [q, filterAngkatan])
 
   useEffect(() => {
     angkatanApi.list().then((list:any) => setAngkatanList(Array.isArray(list)?list:[]))
   }, [])
-  useEffect(() => { load() }, [load, filterAngkatan])
-  useEffect(() => {
-    angkatanApi.list().then((list:any) => setAngkatanList(Array.isArray(list)?list:[]))
-  }, [])
+  useEffect(() => { load() }, [load])
   useEffect(() => {
     sekolahApi.get().then((s: any) => {
       setSekolah(s)
@@ -250,7 +252,7 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
           onChange={e => setFilterAngkatan(e.target.value ? Number(e.target.value) : null)}
         >
           <option value="">Semua Angkatan</option>
-          {angkatanList.map((a:any) => <option key={a.id} value={a.id}>{a.nama}{a.is_aktif?' ★':''}</option>)}
+          {angkatanList.map((a:any) => <option key={a.id} value={a.id}>{a.nama}</option>)}
         </select>
         <div className="flex-1 min-w-[200px]"><SearchBar value={q} onChange={setQ} placeholder="Cari nama / NISN / NISM..."/></div>
         <Button variant="secondary" icon={<Download className="w-4 h-4"/>} onClick={handleDownloadTemplate}>Template</Button>
