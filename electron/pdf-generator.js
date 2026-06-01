@@ -173,6 +173,22 @@ function fmtN(v, dec = 2) {
 //  Kembalikan y setelah garis (siap untuk konten berikutnya)
 // ══════════════════════════════════════════════════════════════════════════
 function drawKopBadrussalam(doc, s, ml, cw, yStart) {
+  // Kalau ada kop_image (upload dari screenshot), pakai itu langsung
+  if (s.kop_image) {
+    try {
+      const imgW = cw
+      const imgH = 90  // tinggi kop image default - proporsional
+      doc.image(s.kop_image, ml, yStart, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center' })
+      // Garis bawah kop
+      const kopBottom = yStart + imgH + 2
+      doc.moveTo(ml, kopBottom).lineTo(ml + cw, kopBottom).lineWidth(3).stroke('#000')
+      doc.moveTo(ml, kopBottom + 4).lineTo(ml + cw, kopBottom + 4).lineWidth(1).stroke('#000')
+      return kopBottom + 16
+    } catch(e) {
+      // Fallback ke generate kop kalau image gagal
+    }
+  }
+
   // Ukuran font dari DB (dengan default)
   const fsYayasan = parseFloat(s.kop_font_yayasan) || 9
   const fsJenis   = parseFloat(s.kop_font_jenis)   || 9.5
@@ -263,7 +279,8 @@ function drawKopBadrussalam(doc, s, ml, cw, yStart) {
 
 // Alias lama — agar kode lama yang masih pakai drawKopResmi tidak error
 function drawKopResmi(doc, s, ml, cw) {
-  return drawKopBadrussalam(doc, s, ml, cw, 20)
+  const mt = parseFloat(s.pdf_margin_top) || 20
+  return drawKopBadrussalam(doc, s, ml, cw, mt)
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -568,7 +585,7 @@ function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nil
     // ════════════════════════════════════════════════════════════════════
     // KOP + JUDUL — sesuai referensi SMPIT Badrussalam
     // ════════════════════════════════════════════════════════════════════
-    let y = drawKopBadrussalam(doc, s, ml, cw, 18)
+    let y = drawKopBadrussalam(doc, s, ml, cw, parseFloat(s.pdf_margin_top)||18)
     doc.font(fB).fontSize(12).fillColor('#000')
       .text('DAFTAR NILAI', ml, y, { width: cw, align: 'center' })
     y += 14
@@ -1064,7 +1081,7 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
 
   // Garis bawah teks — panjang otomatis sesuai lebar teks + padding
   function underText(text, x, y, opts) {
-    const font = opts?.bold ? 'Helvetica-Bold' : 'Helvetica'
+    const font = opts?.bold ? fB : fR
     const sz   = opts?.size || 10
     const w    = Math.min(doc.widthOfString(text, { font, fontSize: sz }) + (opts?.pad || 8), opts?.maxW || 999)
     const cx   = opts?.cx ?? x  // center x jika perlu
@@ -1077,6 +1094,9 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
     doc.save().lineWidth(0.5).stroke('#000').moveTo(x,y).lineTo(x+w,y).stroke().restore()
   }
   function dotLineGray(x, y, w) {}
+
+  // Font dari DB
+  const {B:fB, R:fR, I:fI} = fontSetup(doc, s)
 
   siswaList.forEach((siswa, idx) => {
     if (idx > 0) doc.addPage()
@@ -1372,7 +1392,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     // ════════════════════════════════════════════════════════════════════
     // KOP — sesuai referensi SMPIT Badrussalam
     // ════════════════════════════════════════════════════════════════════
-    let y = drawKopBadrussalam(doc, s, ml, cw, 18)
+    let y = drawKopBadrussalam(doc, s, ml, cw, parseFloat(s.pdf_margin_top)||18)
 
     // ════════════════════════════════════════════════════════════════════
     // JUDUL
@@ -1495,9 +1515,8 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     const ttdX = pw / 2 + 10
     const ttdW = pw - mr - ttdX
 
-    dotLine(ttdX, y, ttdW)
     doc.font(fR).fontSize(9.5).fillColor('#000')
-      .text(`${s.kota || ''}, ${tglSk}`, ttdX, y + 3, { width: ttdW, align: 'center' })
+      .text(`${s.kota || ''}, ${tglSk}`, ttdX, y, { width: ttdW, align: 'center' })
     y += 14
     doc.text('Kepala,', ttdX, y, { width: ttdW, align: 'center' })
     y += 85   // 3cm ruang tanda tangan
@@ -1551,7 +1570,7 @@ function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
   // ════════════════════════════════════════════════════════════════════
   // KOP — sesuai referensi SMPIT Badrussalam
   // ════════════════════════════════════════════════════════════════════
-  let y = drawKopBadrussalam(doc, s, ml, cw, 18)
+  let y = drawKopBadrussalam(doc, s, ml, cw, parseFloat(s.pdf_margin_top)||18)
 
   // ════════════════════════════════════════════════════════════════════
   // JUDUL
@@ -1762,7 +1781,7 @@ function generateSKKB(outputPath, { sekolah: s, siswaList }) {
     // ════════════════════════════════════════════════════════════════════
     // KOP — pakai fungsi terpusat drawKopBadrussalam
     // ════════════════════════════════════════════════════════════════════
-    let y = drawKopBadrussalam(doc, s, ml, cw, 18)
+    let y = drawKopBadrussalam(doc, s, ml, cw, parseFloat(s.pdf_margin_top)||18)
 
     // ════════════════════════════════════════════════════════════════════
     // JUDUL
