@@ -136,6 +136,49 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
             Pengaturan ini mempengaruhi tampilan kop di semua dokumen PDF (SKL, DKN, Nilai Ijazah, Transkrip, dll).
           </p>
 
+          {/* Upload kop dari screenshot */}
+          <div className="border-2 border-dashed rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Kop dari Gambar/Screenshot</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Upload gambar kop surat (PNG/JPG). Jika diisi, kop ini yang dipakai — pengaturan font & logo di bawah diabaikan.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    const r = await (sekolahApi as any).uploadKop() as any
+                    if (r?.ok) { showToast('Kop berhasil diupload'); sekolahApi.get().then((d:any)=>d&&setForm(d)) }
+                    else showToast?.('Gagal upload kop', 'error')
+                  }}
+                  className="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Upload Gambar Kop
+                </button>
+                {form.kop_image && (
+                  <button
+                    onClick={async () => {
+                      const r = await (sekolahApi as any).hapusKop() as any
+                      if (r?.ok) { sekolahApi.get().then((d:any)=>d&&setForm(d)); showToast('Kop dihapus') }
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                  >
+                    Hapus
+                  </button>
+                )}
+              </div>
+            </div>
+            {form.kop_image
+              ? <div className="border rounded-lg overflow-hidden bg-white">
+                  <img src={`file://${form.kop_image}`} alt="Kop" className="w-full object-contain max-h-28"/>
+                </div>
+              : <div className="bg-gray-50 rounded-lg py-6 text-center text-xs text-gray-400">
+                  Belum ada gambar kop — sistem akan generate otomatis dari data sekolah
+                </div>
+            }
+          </div>
+
           {/* Preview kop sederhana */}
           <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 font-serif text-center">
             <div className="flex items-center gap-3">
