@@ -50,7 +50,7 @@ export const nilaiApi = {
   rekapAngkatan:   (id:number)  => api?.nilai.rekapAngkatan(id) ?? [],
   importTemplate:  ()           => api?.nilai.importTemplate(),
   importNilai:     ()           => api?.nilai.importNilai(),
-  ranking:         (): Promise<any[]> => api?.nilai.ranking() ?? Promise.resolve([]),
+  ranking: (angkatan_id?: number|null): Promise<any[]> => api?.nilai.ranking(angkatan_id ?? null) ?? Promise.resolve([]),
 }
 export const angkatanApi = {
   list:        ()                        => api?.angkatan.list() ?? [],
@@ -67,7 +67,7 @@ export const nomorSuratApi = {
   saveAll: (data: any)    => api?.nomorSurat?.saveAll(data),
 }
 export const exportApi = {
-  excelAngkatan: ()                           => api?.export?.excelAngkatan(),
+  excelAngkatan: (angkatan_id?: number|null)  => api?.export?.excelAngkatan(angkatan_id ?? null),
   excelSiswa:    (siswa_id: number)           => api?.export?.excelSiswa(siswa_id),
   excelRekap:    ()                           => api?.export?.excelRekap(),
   excelRanking:  ()                           => api?.export?.excelRanking(),
