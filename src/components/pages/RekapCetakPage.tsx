@@ -11,7 +11,8 @@ export function RekapCetakPage({ showToast }: { showToast: (msg: string, type?: 
   const [printing, setPrinting]   = useState<string | null>(null)
   const [angkatanList, setAngkatanList] = useState<Angkatan[]>([])
   // Per-dokumen pilihan angkatan: null = semua angkatan aktif
-  const [angkatanSel, setAngkatanSel] = useState<Record<string, number | null>>({})
+  const [angkatanSel, setAngkatanSel]   = useState<Record<string, number | null>>({})
+  const [angkatanExcel, setAngkatanExcel] = useState<number | null>(null)
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -41,9 +42,9 @@ export function RekapCetakPage({ showToast }: { showToast: (msg: string, type?: 
     })(),
   }
 
-  const exportExcel = async () => {
+  const exportExcel = async (aid?: number|null) => {
     try {
-      const result = await exportApi.excelAngkatan() as any
+      const result = await exportApi.excelAngkatan(aid ?? angkatanExcel ?? null) as any
       if (result?.ok) showToast('Export Excel berhasil')
       else showToast(result?.error || result?.message || 'Gagal export', 'error')
     } catch (e: any) { showToast(`Gagal export: ${e.message}`, 'error') }
@@ -164,9 +165,22 @@ export function RekapCetakPage({ showToast }: { showToast: (msg: string, type?: 
           Setiap tombol cetak punya dropdown angkatan di sebelahnya — pilih angkatan tertentu agar PDF hanya berisi siswa angkatan tersebut (tahun pelajaran ikut angkatan yang dipilih), atau biarkan "Semua Angkatan" untuk mencetak semua siswa aktif.
         </p>
         <div className="flex flex-wrap gap-2 items-start">
-          <Button variant="secondary" icon={<FileSpreadsheet className="w-4 h-4 text-emerald-600"/>} onClick={exportExcel}>
-            Export Excel
-          </Button>
+          <div className="flex items-stretch">
+            <button
+              onClick={() => exportExcel()}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-l-lg border border-r-0 border-emerald-600 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors">
+              <FileSpreadsheet className="w-4 h-4"/>
+              Export Excel
+            </button>
+            <select
+              className="border border-emerald-600 rounded-r-lg px-2 py-2 text-xs bg-white text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer"
+              value={angkatanExcel ?? ''}
+              onChange={e => setAngkatanExcel(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Semua Angkatan</option>
+              {angkatanList.map((a: Angkatan) => <option key={a.id} value={a.id}>{a.nama}</option>)}
+            </select>
+          </div>
 
           {PDF_BTNS.map(({ type, label }) => {
             const isPrinting = printing === type
