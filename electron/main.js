@@ -116,7 +116,7 @@ function initDB() {
     kop_show_logo_kanan: 'INTEGER', kop_font_family: 'TEXT',
     pdf_margin_left: 'REAL', pdf_margin_right: 'REAL',
     pdf_margin_top: 'REAL', pdf_margin_bottom: 'REAL',
-    pdf_ukuran: 'TEXT',
+    pdf_ukuran: 'TEXT', kop_image: 'TEXT',
     judul_sk_kelulusan: 'TEXT', paragraf_pembuka_sk: 'TEXT', paragraf_penutup_sk: 'TEXT',
     alamat2: 'TEXT', no_skkb: 'TEXT'
   }
@@ -324,9 +324,38 @@ function registerIPC() {
     })
   })
 
+  // ── Upload Kop Image ─────────────────────────────────────────────────────
+  ipcMain.handle('sekolah:upload_kop', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: 'Pilih Gambar Kop Surat',
+        filters: [{ name: 'Gambar', extensions: ['png','jpg','jpeg','webp'] }],
+        properties: ['openFile']
+      })
+      if (result.canceled || !result.filePaths.length) return { ok: false }
+      const src  = result.filePaths[0]
+      const ext  = path.extname(src)
+      const dest = path.join(userDataPath, `kop_custom${ext}`)
+      fs.copyFileSync(src, dest)
+      db.prepare("UPDATE sekolah SET kop_image=? WHERE id=1").run(dest)
+      return { ok: true, path: dest }
+    } catch(e) { return { ok: false, error: String(e instanceof Error ? e.message : e) } }
+  })
+
+  ipcMain.handle('sekolah:hapus_kop', () => {
+    try {
+      const row = db.prepare("SELECT kop_image FROM sekolah WHERE id=1").get()
+      if (row?.kop_image) { try { fs.unlinkSync(row.kop_image) } catch {} }
+      db.prepare("UPDATE sekolah SET kop_image=NULL WHERE id=1").run()
+      return { ok: true }
+    } catch(e) { return { ok: false, error: String(e instanceof Error ? e.message : e) } }
+  })
+
   // ── Ranking Siswa ────────────────────────────────────────────────────────
-  ipcMain.handle('nilai:ranking', () => {
-    const siswa      = db.prepare('SELECT id,no_urut,nama,nisn,kelas FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+  ipcMain.handle('nilai:ranking', (_, angkatan_id) => {
+    const siswa      = angkatan_id
+      ? db.prepare('SELECT s.id,s.no_urut,s.nama,s.nisn,s.kelas FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(angkatan_id)
+      : db.prepare('SELECT id,no_urut,nama,nisn,kelas FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
     const mapels     = db.prepare('SELECT id,nama FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
     const s          = db.prepare('SELECT bobot_raport,bobot_ujian FROM sekolah WHERE id=1').get()
     const semList    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
@@ -608,15 +637,17 @@ function registerIPC() {
     } catch (e) { return { ok: false, error: e.message } }
   })
 
-  // export:excel_angkatan — tidak menerima parameter dari renderer
-  // angkatan aktif dibaca langsung dari DB (angkatan is_aktif=1)
-  // Sehingga tidak ada data yang dikirim renderer -> main (eliminasi clone error)
-  ipcMain.handle('export:excel_angkatan', async () => {
+  // export:excel_angkatan — baca angkatan_id dari DB via flag is_aktif atau parameter
+  ipcMain.handle('export:excel_angkatan', async (_, angkatan_id) => {
     try {
       const { exportExcelAngkatan } = require('./pdf-generator')
-      // Baca semua data dari DB sendiri
-      const angkatan   = db.prepare('SELECT * FROM angkatan WHERE is_aktif=1 ORDER BY id DESC').get() || null
-      const siswaList  = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      const aid = (angkatan_id && typeof angkatan_id === 'number') ? angkatan_id : null
+      const angkatan   = aid
+        ? db.prepare('SELECT * FROM angkatan WHERE id=?').get(aid)
+        : db.prepare('SELECT * FROM angkatan WHERE is_aktif=1 ORDER BY id DESC').get() || null
+      const siswaList  = aid
+        ? db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(aid)
+        : db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
       const mapelList  = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
       const semList    = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
       const seo        = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
