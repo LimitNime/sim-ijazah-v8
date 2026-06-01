@@ -40,6 +40,7 @@ export interface Sekolah {
   alamat2?: string
   no_skkb?: string
   pdf_ukuran?: string  // 'A4' | 'F4'
+  kop_image?: string   // path ke file gambar kop custom
   // PDF margin (disimpan dalam pt, ditampilkan dalam cm di UI)
   pdf_margin_left?: number
   pdf_margin_right?: number
