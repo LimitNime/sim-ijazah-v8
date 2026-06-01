@@ -8,6 +8,8 @@ export const sekolahApi = {
   save:       (d:any)         => api?.sekolah.save(d),
   uploadLogo: (field: string) => api?.sekolah.uploadLogo(field),
   removeLogo: (field: string) => api?.sekolah.removeLogo(field),
+  uploadKop:  ()              => api?.sekolah.uploadKop(),
+  hapusKop:   ()              => api?.sekolah.hapusKop(),
 }
 export const semesterApi = {
   list:    ()             => api?.semester.list() ?? [],
