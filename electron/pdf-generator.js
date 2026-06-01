@@ -176,9 +176,38 @@ function drawKopBadrussalam(doc, s, ml, cw, yStart) {
   // Kalau ada kop_image (upload dari screenshot), pakai itu langsung
   if (s.kop_image) {
     try {
+      // Baca dimensi asli gambar dari PNG/JPEG header supaya proporsional
+      const imgBuf = fs.readFileSync(s.kop_image)
+      let origW = 0, origH = 0
+      // PNG: signature 8 byte, lalu chunk IHDR: width di byte 16-19, height di 20-23
+      if (imgBuf[0] === 0x89 && imgBuf[1] === 0x50) {
+        origW = imgBuf.readUInt32BE(16)
+        origH = imgBuf.readUInt32BE(20)
+      }
+      // JPEG: scan SOF0/SOF2 marker untuk dimensi
+      else if (imgBuf[0] === 0xFF && imgBuf[1] === 0xD8) {
+        let i = 2
+        while (i < imgBuf.length - 8) {
+          if (imgBuf[i] !== 0xFF) break
+          const marker = imgBuf[i + 1]
+          const segLen = imgBuf.readUInt16BE(i + 2)
+          if (marker === 0xC0 || marker === 0xC2) {
+            origH = imgBuf.readUInt16BE(i + 5)
+            origW = imgBuf.readUInt16BE(i + 7)
+            break
+          }
+          i += 2 + segLen
+        }
+      }
+
       const imgW = cw
-      const imgH = 90  // tinggi kop image default - proporsional
-      doc.image(s.kop_image, ml, yStart, { width: imgW, height: imgH, fit: [imgW, imgH], align: 'center' })
+      // Hitung tinggi proporsional berdasarkan rasio gambar asli
+      // Kalau gagal baca dimensi, fallback ke 90pt (sama seperti sebelumnya)
+      const imgH = (origW > 0 && origH > 0)
+        ? Math.round((origH / origW) * imgW)
+        : 90
+
+      doc.image(s.kop_image, ml, yStart, { width: imgW, height: imgH })
       // Garis bawah kop
       const kopBottom = yStart + imgH + 2
       doc.moveTo(ml, kopBottom).lineTo(ml + cw, kopBottom).lineWidth(3).stroke('#000')
