@@ -148,7 +148,7 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
               <div className="flex gap-2">
                 <button
                   onClick={async () => {
-                    const r = await (sekolahApi as any).uploadKop() as any
+                    const r = await sekolahApi.uploadKop() as any
                     if (r?.ok) { showToast('Kop berhasil diupload'); sekolahApi.get().then((d:any)=>d&&setForm(d)) }
                     else showToast?.('Gagal upload kop', 'error')
                   }}
@@ -159,7 +159,7 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
                 {form.kop_image && (
                   <button
                     onClick={async () => {
-                      const r = await (sekolahApi as any).hapusKop() as any
+                      const r = await sekolahApi.hapusKop() as any
                       if (r?.ok) { sekolahApi.get().then((d:any)=>d&&setForm(d)); showToast('Kop dihapus') }
                     }}
                     className="px-3 py-1.5 text-xs font-semibold bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
