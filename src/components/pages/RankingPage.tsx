@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { nilaiApi, exportApi } from '../../lib/api'
+import { nilaiApi, exportApi, angkatanApi } from '../../lib/api'
 import { Download, Medal, Trophy, Award } from 'lucide-react'
 import type { RankingRow } from '../../types'
+
+interface Angkatan { id: number; nama: string; is_aktif: number }
 
 interface Props { showToast: (msg: string, type?: 'success'|'error') => void }
 // Override RankingRow to allow partial data
@@ -11,17 +13,23 @@ interface RankingRowExt extends RankingRow {
 }
 
 export function RankingPage({ showToast }: Props) {
-  const [data, setData]       = useState<RankingRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [exporting, setExp]   = useState(false)
-  const [search, setSearch]   = useState('')
+  const [data, setData]         = useState<RankingRow[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [exporting, setExp]     = useState(false)
+  const [search, setSearch]     = useState('')
+  const [angkatanList, setAngkatanList] = useState<Angkatan[]>([])
+  const [angkatanId, setAngkatanId]     = useState<number|null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const rows = await (nilaiApi as any).ranking() as any
+      const rows = await (nilaiApi as any).ranking(angkatanId) as any
       setData(Array.isArray(rows) ? rows : [])
     } finally { setLoading(false) }
+  }, [angkatanId])
+
+  useEffect(() => {
+    angkatanApi.list().then((list: any) => setAngkatanList(Array.isArray(list) ? list : []))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -90,10 +98,20 @@ export function RankingPage({ showToast }: Props) {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="flex gap-3 items-center">
+      {/* Filter & Search */}
+      <div className="flex gap-3 items-center flex-wrap">
+        <select
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          value={angkatanId ?? ''}
+          onChange={e => setAngkatanId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">Semua Angkatan</option>
+          {angkatanList.map((a: Angkatan) => (
+            <option key={a.id} value={a.id}>{a.nama}{a.is_aktif ? ' ★' : ''}</option>
+          ))}
+        </select>
         <input
-          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="flex-1 min-w-[200px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
           placeholder="Cari nama, NISN, kelas..."
           value={search} onChange={e => setSearch(e.target.value)}
         />
