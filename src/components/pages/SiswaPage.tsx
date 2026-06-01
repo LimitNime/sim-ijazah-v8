@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Plus, Pencil, Trash2, Users, CheckCircle, XCircle, Upload, Hash, RefreshCw, FileText, Camera, X, Download } from 'lucide-react'
 import { Button, SearchBar, Modal, Input, Select, ConfirmDialog, Badge, PageHeader, StatCard, Table, EmptyState , InfoTooltip } from '../ui'
-import { siswaApi, sekolahApi } from '../../lib/api'
+import { siswaApi, sekolahApi, angkatanApi, exportApi } from '../../lib/api'
 import type { Siswa } from '../../types'
 
 const AGAMA_OPTIONS = ['Islam','Kristen','Katolik','Hindu','Buddha','Konghucu','Lainnya']
@@ -23,6 +23,8 @@ const EMPTY: Omit<Siswa,'id'> = {
 export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) => void }) {
   const [data, setData]           = useState<Siswa[]>([])
   const [q, setQ]                 = useState('')
+  const [filterAngkatan, setFilterAngkatan] = useState<number|null>(null)
+  const [angkatanList, setAngkatanList]     = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
   const [errors, setErrors]       = useState<Record<string,string>>({})
@@ -46,7 +48,13 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
     finally { setLoading(false) }
   }, [q])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    angkatanApi.list().then((list:any) => setAngkatanList(Array.isArray(list)?list:[]))
+  }, [])
+  useEffect(() => { load() }, [load, filterAngkatan])
+  useEffect(() => {
+    angkatanApi.list().then((list:any) => setAngkatanList(Array.isArray(list)?list:[]))
+  }, [])
   useEffect(() => {
     sekolahApi.get().then((s: any) => {
       setSekolah(s)
@@ -235,8 +243,16 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
         <StatCard label="No SKL Tergenerate"    value={stats.skl}   icon={<FileText className="w-5 h-5"/>} color="text-purple-600"/>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="flex-1"><SearchBar value={q} onChange={setQ} placeholder="Cari nama / NISN / NISM..."/></div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          value={filterAngkatan ?? ''}
+          onChange={e => setFilterAngkatan(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">Semua Angkatan</option>
+          {angkatanList.map((a:any) => <option key={a.id} value={a.id}>{a.nama}{a.is_aktif?' ★':''}</option>)}
+        </select>
+        <div className="flex-1 min-w-[200px]"><SearchBar value={q} onChange={setQ} placeholder="Cari nama / NISN / NISM..."/></div>
         <Button variant="secondary" icon={<Download className="w-4 h-4"/>} onClick={handleDownloadTemplate}>Template</Button>
         <Button variant="secondary" icon={<Upload className="w-4 h-4"/>} loading={importLoading} onClick={handleImportExcel}>Import Excel</Button>
       </div>
