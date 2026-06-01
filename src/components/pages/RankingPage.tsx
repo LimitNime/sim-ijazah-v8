@@ -107,7 +107,7 @@ export function RankingPage({ showToast }: Props) {
         >
           <option value="">Semua Angkatan</option>
           {angkatanList.map((a: Angkatan) => (
-            <option key={a.id} value={a.id}>{a.nama}{a.is_aktif ? ' ★' : ''}</option>
+            <option key={a.id} value={a.id}>{a.nama}</option>
           ))}
         </select>
         <input
