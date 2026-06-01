@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Save, ChevronLeft, ChevronRight, PenLine, CheckCircle, AlertCircle, Info } from 'lucide-react'
 import { Button, SearchBar, PageHeader, StatCard, Spinner , InfoTooltip } from '../ui'
-import { siswaApi, mapelApi, semesterApi, nilaiApi, sekolahApi } from '../../lib/api'
+import { siswaApi, mapelApi, semesterApi, nilaiApi, sekolahApi, angkatanApi } from '../../lib/api'
 import type { Siswa, Mapel, Semester, Nilai } from '../../types'
 
 interface NilaiMap {
@@ -63,14 +63,24 @@ export function InputNilaiPage({ showToast, initialSiswaId }: { showToast: (msg:
   const [selSem, setSelSem] = useState<Semester | null>(null)
   const [nilaiMap, setNilaiMap] = useState<NilaiMap>({})
   const [sekolah, setSekolah] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
+  const [angkatanList, setAngkatanList] = useState<any[]>([])
+  const [filterAngkatan, setFilterAngkatan] = useState<number|null>(null)
   const [loadingNilai, setLoadingNilai] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Load angkatan list
+  useEffect(() => {
+    angkatanApi.list().then((list:any) => setAngkatanList(Array.isArray(list)?list:[]))
+  }, [])
+
   // Load master data
   useEffect(() => {
+    const siswaPromise = filterAngkatan
+      ? angkatanApi.getSiswa(filterAngkatan)
+      : siswaApi.list()
     Promise.all([
-      siswaApi.list(),
+      siswaPromise,
       mapelApi.list(),
       semesterApi.list(),
     ]).then(([s, m, sem]) => {
@@ -87,7 +97,7 @@ export function InputNilaiPage({ showToast, initialSiswaId }: { showToast: (msg:
       }
       setLoading(false)
     })
-    sekolahApi.get().then(sk => setSekolah(sk))
+    sekolahApi.get().then((sk: any) => setSekolah(sk))
   }, [initialSiswaId])
 
   // Filter siswa by search
@@ -228,6 +238,14 @@ export function InputNilaiPage({ showToast, initialSiswaId }: { showToast: (msg:
       <div className="flex gap-4 flex-1 min-h-0">
         {/* LEFT: siswa list */}
         <div className="w-64 shrink-0 flex flex-col gap-2">
+          <select
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 w-full"
+            value={filterAngkatan ?? ''}
+            onChange={e => { setFilterAngkatan(e.target.value ? Number(e.target.value) : null); setSelSiswa(null) }}
+          >
+            <option value="">Semua Angkatan</option>
+            {angkatanList.map((a:any) => <option key={a.id} value={a.id}>{a.nama}{a.is_aktif?' ★':''}</option>)}
+          </select>
           <SearchBar value={q} onChange={setQ} placeholder="Cari siswa..." />
           <div className="card flex-1 overflow-y-auto divide-y divide-gray-50">
             {filteredSiswa.length === 0 && (
