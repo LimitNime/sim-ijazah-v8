@@ -5,7 +5,7 @@ import {
   Users, GraduationCap, Shuffle, Printer, Download
 } from 'lucide-react'
 import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge, Table } from '../ui'
-import { kelasApi, denahApi, jadwalApi, jurnalApi, absensiApi, angkatanApi, mapelApi } from '../../lib/api'
+import { kelasApi, denahApi, jadwalApi, jurnalApi, absensiApi, angkatanApi, mapelApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 const HARI = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu']
@@ -357,6 +357,10 @@ function TabJadwal({ kelasList, selectedKelas, setSelectedKelas, mapelList, show
         <button onClick={()=>{setKelas(null);setSelectedKelas(null)}} className="flex items-center gap-1 text-sm text-blue-600 hover:underline"><ChevronLeft className="w-4 h-4"/>Ganti Kelas</button>
         <h2 className="font-bold text-gray-800 text-lg">Jadwal — {kelas.nama}</h2>
         <div className="flex-1"/>
+<button onClick={async()=>{const r:any=await pdfCetakApi.jadwal(kelas.id);if(!r?.ok)alert(r?.error||'Gagal')}}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800">
+          <Printer className="w-3.5 h-3.5"/> Cetak PDF
+        </button>
         <Button onClick={handleSave} icon={<Save className="w-4 h-4"/>} loading={saving}>Simpan Jadwal</Button>
       </div>
 
@@ -478,6 +482,10 @@ function TabJurnal({ kelasList, selectedKelas, setSelectedKelas, mapelList, show
         <h2 className="font-bold text-gray-800 text-lg">Jurnal — {kelas.nama}</h2>
         <div className="flex-1"/>
         <input type="month" value={bulan} onChange={e=>setBulan(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm"/>
+<button onClick={async()=>{const r:any=await pdfCetakApi.jurnal(kelas.id,bulan);if(!r?.ok)alert(r?.error||'Gagal')}}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 text-white text-sm rounded-lg hover:bg-gray-800">
+          <Printer className="w-3.5 h-3.5"/> Cetak PDF
+        </button>
         <Button onClick={()=>setModal({open:true,mode:'add',form:{...EMPTY}})} icon={<Plus className="w-4 h-4"/>}>Tambah Entri</Button>
       </div>
 
