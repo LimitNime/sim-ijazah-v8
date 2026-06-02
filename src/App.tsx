@@ -15,6 +15,7 @@ import { ImportNilaiPage } from './components/pages/ImportNilaiPage'
 import { PenomoranSuratPage } from './components/pages/PenomoranSuratPage'
 import { AngkatanPage } from './components/pages/AngkatanPage'
 import { RankingPage } from './components/pages/RankingPage'
+import { WaliKelasPage } from './components/pages/WaliKelasPage'
 import { ToastContainer } from './components/ui'
 
 function AppInner() {
@@ -52,6 +53,7 @@ function AppInner() {
       case 'rekap-cetak':  return <RekapCetakPage showToast={show} />
       case 'angkatan':     return <AngkatanPage showToast={show} />
       case 'ranking':      return <RankingPage showToast={show} />
+      case 'wali-kelas':   return <WaliKelasPage showToast={show} />
       default: return null
     }
   }
