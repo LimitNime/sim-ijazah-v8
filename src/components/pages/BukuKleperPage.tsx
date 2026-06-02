@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BookOpen, Search, Printer } from 'lucide-react'
 import { SearchBar, PageHeader, Badge } from '../ui'
-import { kleperApi } from '../../lib/api'
+import { kleperApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 const HURUF = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -11,6 +11,7 @@ export function BukuKleperPage({ showToast }: { showToast: (msg: string, type?: 
   const [q, setQ] = useState('')
   const [huruf, setHuruf] = useState<string|null>(null)
   const [loading, setLoading] = useState(false)
+  const [printing, setPrinting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -41,7 +42,14 @@ export function BukuKleperPage({ showToast }: { showToast: (msg: string, type?: 
     catch { return tgl }
   }
 
-  const handlePrint = () => window.print()
+  const handlePrint = async () => {
+    setPrinting(true)
+    try {
+      const r: any = await pdfCetakApi.bukuKleper()
+      if (!r?.ok) showToast(r?.error || 'Gagal cetak PDF', 'error')
+      else showToast('PDF dibuka')
+    } finally { setPrinting(false) }
+  }
 
   return (
     <div className="space-y-4">
@@ -49,8 +57,8 @@ export function BukuKleperPage({ showToast }: { showToast: (msg: string, type?: 
         title="Buku Kleper Siswa"
         subtitle="Indeks alfabetis data siswa"
         actions={
-          <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700">
-            <Printer className="w-4 h-4" /> Cetak
+          <button onClick={handlePrint} disabled={printing} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50">
+            <Printer className="w-4 h-4" /> {printing ? 'Membuat PDF...' : 'Cetak PDF'}
           </button>
         }
       />
