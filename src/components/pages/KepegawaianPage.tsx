@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Pencil, Trash2, Eye, X, Save, RefreshCw, ChevronLeft } from 'lucide-react'
 import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge } from '../ui'
-import { guruApi, absensiGuruApi, jamMengajarApi, skTugasApi } from '../../lib/api'
+import { guruApi, absensiGuruApi, jamMengajarApi, skTugasApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -115,6 +115,10 @@ function TabDataGuru({ showToast }: any) {
         <div className="flex-1 max-w-sm"><SearchBar value={q} onChange={setQ} placeholder="Cari nama, NIP..." /></div>
         <span className="text-sm text-gray-500">{data.length} guru</span>
         <div className="flex-1" />
+<button onClick={async()=>{const r:any=await pdfCetakApi.bukuIndukGuru();if(!r?.ok)showToast(r?.error||'Gagal','error');else showToast('PDF dibuka')}}
+          className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700">
+          <Users className="w-4 h-4"/> Cetak Buku Induk
+        </button>
         <Button onClick={() => setModal({ open: true, mode: 'add', form: { ...EMPTY_GURU } })} icon={<Plus className="w-4 h-4" />}>Tambah Guru</Button>
       </div>
 
