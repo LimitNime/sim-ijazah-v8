@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BookMarked, Plus, Pencil, Trash2, Eye, X, ChevronLeft } from 'lucide-react'
 import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge } from '../ui'
-import { siswaApi, angkatanApi } from '../../lib/api'
+import { siswaApi, angkatanApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 const AGAMA_OPT = ['Islam','Kristen','Katolik','Hindu','Buddha','Konghucu'].map(v=>({value:v,label:v}))
@@ -205,6 +205,7 @@ export function BukuIndukSiswaPage({ showToast }: { showToast: (msg: string, typ
   const [detail, setDetail] = useState<any|null>(null)
   const [confirm, setConfirm] = useState<{open:boolean;id:number|null;nama:string}>({open:false,id:null,nama:''})
   const [saving, setSaving] = useState(false)
+  const [printing, setPrinting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -238,7 +239,11 @@ export function BukuIndukSiswaPage({ showToast }: { showToast: (msg: string, typ
   return (
     <div className="space-y-4">
       <PageHeader title="Buku Induk Siswa" subtitle="Data lengkap siswa format resmi"
-        actions={<Button onClick={() => setModal({ open: true, mode: 'add', form: { ...EMPTY } })} icon={<Plus className="w-4 h-4" />}>Tambah Siswa</Button>}
+        actions={<button onClick={async()=>{setPrinting(true);const r:any=await pdfCetakApi.bukuIndukSiswa();if(!r?.ok)showToast(r?.error||'Gagal','error');else showToast('PDF dibuka');setPrinting(false)}}
+          disabled={printing} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50">
+          <BookMarked className="w-4 h-4"/> {printing?'Membuat PDF...':'Cetak PDF'}
+        </button>
+        <Button onClick={() => setModal({ open: true, mode: 'add', form: { ...EMPTY } })} icon={<Plus className="w-4 h-4" />}>Tambah Siswa</Button>}
       />
 
       <div className="flex items-center gap-3">
