@@ -15,7 +15,12 @@ import { ImportNilaiPage } from './components/pages/ImportNilaiPage'
 import { PenomoranSuratPage } from './components/pages/PenomoranSuratPage'
 import { AngkatanPage } from './components/pages/AngkatanPage'
 import { RankingPage } from './components/pages/RankingPage'
-import { WaliKelasPage } from './components/pages/WaliKelasPage'
+import { WaliKelasPage }      from './components/pages/WaliKelasPage'
+import { BukuKleperPage }     from './components/pages/BukuKleperPage'
+import { BukuIndukSiswaPage } from './components/pages/BukuIndukSiswaPage'
+import { LegerNilaiPage }     from './components/pages/LegerNilaiPage'
+import { SuratPage }          from './components/pages/SuratPage'
+import { KepegawaianPage }    from './components/pages/KepegawaianPage'
 import { ToastContainer } from './components/ui'
 
 function AppInner() {
@@ -53,7 +58,12 @@ function AppInner() {
       case 'rekap-cetak':  return <RekapCetakPage showToast={show} />
       case 'angkatan':     return <AngkatanPage showToast={show} />
       case 'ranking':      return <RankingPage showToast={show} />
-      case 'wali-kelas':   return <WaliKelasPage showToast={show} />
+      case 'wali-kelas':    return <WaliKelasPage showToast={show} />
+      case 'buku-kleper':   return <BukuKleperPage showToast={show} />
+      case 'buku-induk':    return <BukuIndukSiswaPage showToast={show} />
+      case 'leger-nilai':   return <LegerNilaiPage showToast={show} />
+      case 'surat':         return <SuratPage showToast={show} />
+      case 'kepegawaian':   return <KepegawaianPage showToast={show} />
       default: return null
     }
   }
