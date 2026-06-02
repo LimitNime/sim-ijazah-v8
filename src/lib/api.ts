@@ -3,6 +3,52 @@ const api = (window as any).api
 export const authApi = {
   login: (email: string, password: string) => api?.auth.login(email, password) ?? null,
 }
+export const kleperApi = {
+  list:    (q?:string)     => api?.kleper.list(q),
+  byHuruf: (huruf:string)  => api?.kleper.byHuruf(huruf),
+}
+export const guruApi = {
+  list:       (q?:string)       => api?.guru.list(q),
+  get:        (id:number)       => api?.guru.get(id),
+  add:        (d:any)           => api?.guru.add(d),
+  update:     (id:number, d:any)=> api?.guru.update(id, d),
+  delete:     (id:number)       => api?.guru.delete(id),
+  uploadFoto: (id:number)       => api?.guru.uploadFoto(id),
+}
+export const absensiGuruApi = {
+  get:   (tanggal:string)           => api?.absensiGuru.get(tanggal),
+  save:  (tanggal:string, rows:any[]) => api?.absensiGuru.save(tanggal, rows),
+  rekap: (bulan?:string)            => api?.absensiGuru.rekap(bulan),
+}
+export const jamMengajarApi = {
+  list:   (ta?:string) => api?.jamMengajar.list(ta),
+  save:   (d:any)      => api?.jamMengajar.save(d),
+  delete: (id:number)  => api?.jamMengajar.delete(id),
+}
+export const skTugasApi = {
+  list:   ()           => api?.skTugas.list(),
+  save:   (d:any)      => api?.skTugas.save(d),
+  delete: (id:number)  => api?.skTugas.delete(id),
+}
+export const pdfCetakApi = {
+  bukuKleper:     ()                         => api?.pdfCetak.bukuKleper(),
+  bukuIndukSiswa: (angkatan_id?: number)     => api?.pdfCetak.bukuIndukSiswa(angkatan_id),
+  leger:          (kelas_id: number)         => api?.pdfCetak.leger(kelas_id),
+  bukuIndukGuru:  ()                         => api?.pdfCetak.bukuIndukGuru(),
+  absensiGuru:    (bulan?: string)           => api?.pdfCetak.absensiGuru(bulan),
+  jadwal:         (kelas_id: number)         => api?.pdfCetak.jadwal(kelas_id),
+  jurnal:         (kelas_id: number, bulan?: string) => api?.pdfCetak.jurnal(kelas_id, bulan),
+  absensiSiswa:   (kelas_id: number, bulan?: string) => api?.pdfCetak.absensiSiswa(kelas_id, bulan),
+  surat:          (params: any)              => api?.pdfCetak.surat(params),
+}
+export const legerApi = {
+  get: (kelas_id:number) => api?.leger.get(kelas_id),
+}
+export const suratApi = {
+  getSiswa: (id:number) => api?.surat.getSiswa(id),
+  list:     ()          => api?.surat.list(),
+  saveLog:  (d:any)     => api?.surat.saveLog(d),
+}
 export const kelasApi = {
   list:   ()        => api?.kelas.list(),
   get:    (id:number) => api?.kelas.get(id),
