@@ -237,7 +237,8 @@ export function BukuIndukSiswaPage({ showToast }: { showToast: (msg: string, typ
   }
 
   return (
-    <PageHeader 
+    <div className="space-y-4">
+      <PageHeader 
         title="Buku Induk Siswa" 
         subtitle="Data lengkap siswa format resmi"
         actions={
