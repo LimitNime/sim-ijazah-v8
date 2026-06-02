@@ -94,6 +94,34 @@ contextBridge.exposeInMainWorld('api', {
     ijazahSiswa:      id => invoke('pdf:ijazah_siswa', id),
     skkbSiswa:        id => invoke('pdf:skkb_siswa', id),
   },
+  kelas: {
+    list:    ()        => invoke('kelas:list'),
+    get:     id        => invoke('kelas:get', id),
+    add:     d         => invoke('kelas:add', d),
+    update:  (id, d)   => invoke('kelas:update', id, d),
+    delete:  id        => invoke('kelas:delete', id),
+    siswa:   id        => invoke('kelas:siswa', id),
+  },
+  denah: {
+    get:   kelas_id          => invoke('denah:get', kelas_id),
+    save:  (kelas_id, seats) => invoke('denah:save', kelas_id, seats),
+    auto:  kelas_id          => invoke('denah:auto', kelas_id),
+  },
+  jadwal: {
+    get:   kelas_id        => invoke('jadwal:get', kelas_id),
+    save:  (kelas_id, rows) => invoke('jadwal:save', kelas_id, rows),
+  },
+  jurnal: {
+    list:   (kelas_id, bulan) => invoke('jurnal:list', kelas_id, bulan),
+    add:    d                 => invoke('jurnal:add', d),
+    update: (id, d)           => invoke('jurnal:update', id, d),
+    delete: id                => invoke('jurnal:delete', id),
+  },
+  absensi: {
+    get:   (kelas_id, tanggal) => invoke('absensi:get', kelas_id, tanggal),
+    save:  (kelas_id, tanggal, rows) => invoke('absensi:save', kelas_id, tanggal, rows),
+    rekap: (kelas_id, bulan)   => invoke('absensi:rekap', kelas_id, bulan),
+  },
   db: {
     backup:  () => invoke('db:backup'),
     restore: () => invoke('db:restore'),
