@@ -238,23 +238,14 @@ export function BukuIndukSiswaPage({ showToast }: { showToast: (msg: string, typ
 
   return (
     <div className="space-y-4">
-      <PageHeader 
-        title="Buku Induk Siswa" 
-        subtitle="Data lengkap siswa format resmi"
-        actions={
-          <>
-            <button 
-              onClick={async()=>{setPrinting(true);const r:any=await pdfCetakApi.bukuIndukSiswa();if(!r?.ok)showToast(r?.error||'Gagal','error');else showToast('PDF dibuka');setPrinting(false)}}
-              disabled={printing} 
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50"
-            >
-              <BookMarked className="w-4 h-4"/> {printing ? 'Membuat PDF...' : 'Cetak PDF'}
-            </button>
-            <Button onClick={() => setModal({ open: true, mode: 'add', form: { ...EMPTY } })} icon={<Plus className="w-4 h-4" />}>
-              Tambah Siswa
-            </Button>
-          </>
-        }
+      <PageHeader title="Buku Induk Siswa" subtitle="Data lengkap siswa format resmi"
+        actions={<div className="flex gap-2">
+          <button onClick={async()=>{setPrinting(true);const r:any=await pdfCetakApi.bukuIndukSiswa();if(!r?.ok)showToast(r?.error||'Gagal','error');else showToast('PDF dibuka');setPrinting(false)}}
+            disabled={printing} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50">
+            <BookMarked className="w-4 h-4"/> {printing?'Membuat PDF...':'Cetak PDF'}
+          </button>
+          <Button onClick={() => setModal({ open: true, mode: 'add', form: { ...EMPTY } })} icon={<Plus className="w-4 h-4" />}>Tambah Siswa</Button>
+        </div>}
       />
 
       <div className="flex items-center gap-3">
