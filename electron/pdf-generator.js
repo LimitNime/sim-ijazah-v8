@@ -1931,4 +1931,829 @@ module.exports = {
   generateTranskrip,
   generateSKKelulusan,
   generateSKKB,
+  generateBukuKleper,
+  generateBukuInduk,
+  generateLeger,
+  generateBukuIndukGuru,
+  generateAbsensiGuru,
+  generateJadwal,
+  generateJurnal,
+  generateAbsensiSiswa,
+  generateSurat,
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BUKU KLEPER — PDF Indeks Alfabetis Siswa
+// ══════════════════════════════════════════════════════════════════════════
+function generateBukuKleper(outputPath, { sekolah: s, siswaList }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4 = getPaperSize(s, false)
+  const [pw, ph] = A4
+  const ml = parseFloat(s.pdf_margin_left) || 45
+  const mr = parseFloat(s.pdf_margin_right) || 45
+  const mt = parseFloat(s.pdf_margin_top) || 18
+  const cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4, margins: { top: mt, bottom: 30, left: ml, right: mr }, autoFirstPage: false, bufferPages: true })
+  const fn  = path.join(outputPath, `buku_kleper_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+
+  const f = fontSetup(doc, s)
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
+  // Group siswa by first letter
+  const grouped = {}
+  for (const sw of siswaList) {
+    const key = (sw.nama?.[0] || '#').toUpperCase()
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(sw)
+  }
+
+  const COL_W = [28, 180, 22, 80, 80, 120, 55, 55]
+  const HEADERS = ['No', 'Nama Siswa', 'L/P', 'NISN', 'NIS/NISM', 'Tempat, Tgl Lahir', 'Kelas', 'Thn Masuk']
+  const ROW_H = 16
+  const HEAD_H = 18
+
+  let firstLetter = true
+  for (const letter of ALPHABET) {
+    const rows = grouped[letter]
+    if (!rows || rows.length === 0) continue
+
+    doc.addPage()
+    let y = drawKopResmi(doc, s, ml, cw)
+
+    // Judul halaman
+    doc.font(f.B).fontSize(12).fillColor('#000')
+      .text('BUKU KLEPER SISWA', ml, y + 4, { width: cw, align: 'center' })
+    y += 22
+    doc.font(f.R).fontSize(9)
+      .text(`Huruf: ${letter}  |  Jumlah: ${rows.length} siswa`, ml, y, { width: cw, align: 'center' })
+    y += 16
+
+    // Header tabel
+    doc.rect(ml, y, cw, HEAD_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+    let x = ml
+    HEADERS.forEach((h, i) => {
+      doc.font(f.B).fontSize(7.5).fillColor('#fff')
+        .text(h, x + 2, y + 4, { width: COL_W[i] - 4, align: 'center' })
+      x += COL_W[i]
+    })
+    y += HEAD_H
+
+    rows.forEach((sw, idx) => {
+      if (y + ROW_H > ph - 40) {
+        doc.addPage()
+        y = drawKopResmi(doc, s, ml, cw)
+        // Repeat header
+        doc.rect(ml, y, cw, HEAD_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+        let hx = ml
+        HEADERS.forEach((h, i) => {
+          doc.font(f.B).fontSize(7.5).fillColor('#fff')
+            .text(h, hx + 2, y + 4, { width: COL_W[i] - 4, align: 'center' })
+          hx += COL_W[i]
+        })
+        y += HEAD_H
+      }
+
+      const bg = idx % 2 === 0 ? '#f9fafb' : '#fff'
+      doc.rect(ml, y, cw, ROW_H).fillAndStroke(bg, '#d1d5db')
+      const ttl = sw.tempat_lahir && sw.tgl_lahir ? `${sw.tempat_lahir}, ${fmtTgl(sw.tgl_lahir)}` : (sw.tempat_lahir || '-')
+      const vals = [String(idx + 1), sw.nama || '-', sw.jk || '-', sw.nisn || '-', sw.nism || '-', ttl, sw.kelas || '-', sw.tahun_masuk || '-']
+      let rx = ml
+      vals.forEach((v, i) => {
+        doc.font(i === 1 ? f.B : f.R).fontSize(7).fillColor('#111')
+          .text(v, rx + 2, y + 4, { width: COL_W[i] - 4, align: i === 0 ? 'center' : 'left', ellipsis: true })
+        rx += COL_W[i]
+      })
+      y += ROW_H
+    })
+  }
+
+  // Summary page
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+  doc.font(f.B).fontSize(12).fillColor('#000').text('REKAPITULASI BUKU KLEPER', ml, y + 4, { width: cw, align: 'center' })
+  y += 26
+  const totalL = siswaList.filter(sw => sw.jk === 'L').length
+  const totalP = siswaList.filter(sw => sw.jk === 'P').length
+  const cols = [['Huruf', 60], ['Jumlah Siswa', 80], ['L', 50], ['P', 50]]
+  const sumW = cols.reduce((a, c) => a + c[1], 0)
+  let sx = ml + (cw - sumW) / 2
+  doc.rect(sx, y, sumW, 18).fillAndStroke('#1e3a5f', '#1e3a5f')
+  let cx = sx
+  cols.forEach(([h, w]) => { doc.font(f.B).fontSize(8).fillColor('#fff').text(h, cx + 2, y + 4, { width: w - 4, align: 'center' }); cx += w })
+  y += 18
+  for (const letter of ALPHABET) {
+    const rows = grouped[letter] || []
+    if (!rows.length) continue
+    const bg = ALPHABET.indexOf(letter) % 2 === 0 ? '#f3f4f6' : '#fff'
+    doc.rect(sx, y, sumW, 16).fillAndStroke(bg, '#d1d5db')
+    let cx2 = sx
+    const jl = rows.filter((sw: any) => sw.jk === 'L').length
+    const jp = rows.filter((sw: any) => sw.jk === 'P').length
+    ;[letter, String(rows.length), String(jl), String(jp)].forEach((v, i) => {
+      doc.font(f.R).fontSize(8).fillColor('#111').text(v, cx2 + 2, y + 4, { width: cols[i][1] - 4, align: 'center' })
+      cx2 += cols[i][1]
+    })
+    y += 16
+  }
+  y += 4
+  doc.rect(sx, y, sumW, 18).fillAndStroke('#e8f0fe', '#1e3a5f')
+  let cx3 = sx
+  ;['TOTAL', String(siswaList.length), String(totalL), String(totalP)].forEach((v, i) => {
+    doc.font(f.B).fontSize(8.5).fillColor('#1e3a5f').text(v, cx3 + 2, y + 4, { width: cols[i][1] - 4, align: 'center' })
+    cx3 += cols[i][1]
+  })
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BUKU INDUK SISWA — PDF format resmi biodata lengkap
+// ══════════════════════════════════════════════════════════════════════════
+function generateBukuInduk(outputPath, { sekolah: s, siswaList }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4 = getPaperSize(s, false)
+  const [pw, ph] = A4
+  const ml = 45, mr = 45, mt = 18, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4, margins: { top: mt, bottom: 30, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `buku_induk_siswa_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  const drawField = (doc, label, value, x, y, lw, vw) => {
+    doc.font(f.R).fontSize(8).fillColor('#555').text(label, x, y, { width: lw })
+    doc.font(f.R).fontSize(8).fillColor('#000').text(':', x + lw, y, { width: 8 })
+    doc.font(f.B).fontSize(8).fillColor('#000').text(value || '—', x + lw + 10, y, { width: vw })
+    doc.moveTo(x + lw + 10, y + 10).lineTo(x + lw + 10 + vw, y + 10).lineWidth(0.3).stroke('#ccc')
+  }
+
+  for (const sw of siswaList) {
+    doc.addPage()
+    let y = drawKopResmi(doc, s, ml, cw)
+
+    // Judul
+    doc.font(f.B).fontSize(12).fillColor('#1e3a5f').text('BUKU INDUK SISWA', ml, y + 4, { width: cw, align: 'center' })
+    doc.font(f.R).fontSize(8.5).fillColor('#555').text(s.nama_sekolah || '', ml, y + 20, { width: cw, align: 'center' })
+    y += 40
+
+    // Foto placeholder kanan atas
+    const fotoSize = 70
+    const fotoX = ml + cw - fotoSize
+    doc.rect(fotoX, y, fotoSize, fotoSize).stroke('#999')
+    if (sw.foto) {
+      try { doc.image(sw.foto, fotoX + 1, y + 1, { fit: [fotoSize - 2, fotoSize - 2] }) }
+      catch {}
+    } else {
+      doc.font(f.R).fontSize(7).fillColor('#aaa').text('Foto\n3×4', fotoX, y + 25, { width: fotoSize, align: 'center' })
+    }
+
+    const FW = cw - fotoSize - 10
+    const LW = 90, VW = FW - LW - 12
+    const sec = (title: string) => {
+      doc.font(f.B).fontSize(8).fillColor('#1e3a5f').text(title, ml, y, { width: FW })
+      doc.moveTo(ml, y + 10).lineTo(ml + FW, y + 10).lineWidth(0.5).stroke('#1e3a5f')
+      y += 14
+    }
+
+    // Identitas siswa
+    sec('A. IDENTITAS SISWA')
+    const identitas = [
+      ['Nama Lengkap', sw.nama], ['Jenis Kelamin', sw.jk === 'L' ? 'Laki-laki' : 'Perempuan'],
+      ['NISN', sw.nisn], ['NIS / NISM', sw.nism], ['NIK', sw.nik],
+      ['Tempat Lahir', sw.tempat_lahir], ['Tanggal Lahir', fmtTgl(sw.tgl_lahir)],
+      ['Agama', sw.agama], ['Anak Ke', sw.anak_ke], ['Jumlah Saudara', sw.jml_saudara], ['Status Anak', sw.status_anak],
+    ]
+    identitas.forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+
+    y += 6; sec('B. ALAMAT SISWA')
+    ;[['Alamat', sw.alamat], ['RT / RW', sw.rt && sw.rw ? `${sw.rt} / ${sw.rw}` : sw.rt || ''],
+      ['Kelurahan/Desa', sw.kelurahan], ['Kecamatan', sw.kecamatan],
+      ['Kabupaten/Kota', sw.kabupaten], ['Provinsi', sw.provinsi],
+      ['Kode Pos', sw.kode_pos], ['No. HP Siswa', sw.no_hp],
+    ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+
+    y += 6; sec('C. DATA ORANG TUA')
+    ;[['Nama Ayah', sw.nama_ayah], ['Pekerjaan Ayah', sw.pekerjaan_ayah], ['Pendidikan Ayah', sw.pendidikan_ayah],
+      ['Nama Ibu', sw.nama_ibu], ['Pekerjaan Ibu', sw.pekerjaan_ibu], ['Pendidikan Ibu', sw.pendidikan_ibu],
+      ['No. HP Ortu', sw.no_hp_ortu], ['Alamat Ortu', sw.alamat_ortu],
+    ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+
+    if (sw.nama_wali) {
+      y += 6; sec('D. DATA WALI')
+      ;[['Nama Wali', sw.nama_wali], ['Pekerjaan Wali', sw.pekerjaan_wali], ['No. HP Wali', sw.no_hp_wali],
+      ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+    }
+
+    y += 6; sec('E. RIWAYAT SEKOLAH')
+    ;[['Asal Sekolah', sw.asal_sekolah], ['Tahun Masuk', sw.tahun_masuk],
+      ['Kelas', sw.kelas], ['No. Induk', sw.no_induk],
+    ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+
+    if (sw.keterangan) {
+      y += 6
+      doc.font(f.B).fontSize(8).fillColor('#555').text('Keterangan:', ml, y)
+      doc.font(f.R).fontSize(8).fillColor('#000').text(sw.keterangan, ml + 70, y, { width: cw - 70 })
+    }
+
+    // TTD
+    const ttdY = Math.max(y + 20, ph - 100)
+    const ttdX = ml + cw - 180
+    doc.font(f.R).fontSize(8).fillColor('#000')
+      .text(`${s.kota_sekolah || '________'}, ${fmtTgl(new Date().toISOString().slice(0, 10))}`, ttdX, ttdY, { width: 180, align: 'center' })
+      .text('Kepala Sekolah,', ttdX, ttdY + 12, { width: 180, align: 'center' })
+    doc.moveDown(3)
+    doc.font(f.B).fontSize(8).text(s.kepala_sekolah || '____________________', ttdX, ttdY + 52, { width: 180, align: 'center' })
+      .font(f.R).text(`NIP. ${s.nip_kepsek || '____________________'}`, ttdX, ttdY + 62, { width: 180, align: 'center' })
+  }
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  LEGER NILAI KELAS — PDF tabel nilai per kelas
+// ══════════════════════════════════════════════════════════════════════════
+function generateLeger(outputPath, { sekolah: s, kelas, siswaList, mapelList, nilaiMap, ujianSem, raportSems, br, bu, totalB }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4land = getPaperSize(s, true)
+  const [pw, ph] = A4land
+  const ml = 30, mr = 30, mt = 18, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4land, margins: { top: mt, bottom: 25, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `leger_${kelas.nama?.replace(/\s/g,'_')}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  const getNilaiAkhir = (siswaId: number, mapelId: number) => {
+    const nilaiRaport = raportSems.map((sem: any) => nilaiMap[`${siswaId}_${mapelId}_${sem.id}`]?.nilai_raport ?? null).filter((v: any) => v !== null)
+    const avgR = nilaiRaport.length ? nilaiRaport.reduce((a: number, b: number) => a + b, 0) / nilaiRaport.length : null
+    const nilaiU = ujianSem ? (nilaiMap[`${siswaId}_${mapelId}_${ujianSem.id}`]?.nilai_raport ?? null) : null
+    if (avgR === null && nilaiU === null) return null
+    return Math.round(((avgR ?? 0) * br + (nilaiU ?? 0) * bu) / totalB * 10) / 10
+  }
+
+  const NO_W = 22, NAMA_W = 130
+  const mapelW = Math.min(Math.floor((cw - NO_W - NAMA_W - 45) / (mapelList.length + 1)), 42)
+  const RATA_W = 45
+
+  doc.addPage()
+  let y = mt
+
+  // Kop sederhana untuk landscape
+  if (s.kop_image) {
+    try {
+      const imgBuf = fs.readFileSync(s.kop_image)
+      let origW = 0, origH = 0
+      if (imgBuf[0] === 0x89 && imgBuf[1] === 0x50) { origW = imgBuf.readUInt32BE(16); origH = imgBuf.readUInt32BE(20) }
+      else if (imgBuf[0] === 0xFF && imgBuf[1] === 0xD8) {
+        let i = 2
+        while (i < imgBuf.length - 8) {
+          if (imgBuf[i] !== 0xFF) break
+          const marker = imgBuf[i + 1]; const segLen = imgBuf.readUInt16BE(i + 2)
+          if (marker === 0xC0 || marker === 0xC2) { origH = imgBuf.readUInt16BE(i + 5); origW = imgBuf.readUInt16BE(i + 7); break }
+          i += 2 + segLen
+        }
+      }
+      const imgH = origW > 0 ? Math.round((origH / origW) * cw) : 70
+      doc.image(s.kop_image, ml, y, { width: cw, height: imgH })
+      y += imgH + 4
+      doc.moveTo(ml, y).lineTo(ml + cw, y).lineWidth(3).stroke('#000')
+      doc.moveTo(ml, y + 4).lineTo(ml + cw, y + 4).lineWidth(1).stroke('#000')
+      y += 12
+    } catch { y = drawKopResmi(doc, s, ml, cw) }
+  } else { y = drawKopResmi(doc, s, ml, cw) }
+
+  doc.font(f.B).fontSize(11).fillColor('#000').text('LEGER NILAI KELAS', ml, y, { width: cw, align: 'center' })
+  y += 14
+  doc.font(f.R).fontSize(9).text(`Kelas: ${kelas.nama}  |  Wali Kelas: ${kelas.wali_kelas || '—'}  |  Tahun Ajaran: ${kelas.tahun_ajaran || s.tahun_ajaran || '—'}  |  Bobot: Raport ${br}% + Ujian ${bu}%`, ml, y, { width: cw, align: 'center' })
+  y += 16
+
+  // Header tabel
+  const tableW = NO_W + NAMA_W + mapelList.length * mapelW + RATA_W
+  const startX = ml + (cw - tableW) / 2
+
+  // Row 1: No, Nama, Mapel headers, Rata
+  doc.rect(startX, y, tableW, 20).fillAndStroke('#1e3a5f', '#1e3a5f')
+  doc.font(f.B).fontSize(7).fillColor('#fff')
+  doc.text('No', startX, y + 6, { width: NO_W, align: 'center' })
+  doc.text('Nama Siswa', startX + NO_W, y + 6, { width: NAMA_W, align: 'center' })
+  let hx = startX + NO_W + NAMA_W
+  mapelList.forEach((m: any) => {
+    const abbr = m.singkatan || m.nama?.split(' ').map((w: string) => w[0]).join('') || m.nama?.slice(0, 4)
+    doc.text(abbr, hx, y + 2, { width: mapelW, align: 'center' })
+    hx += mapelW
+  })
+  doc.text('Rata²', hx, y + 6, { width: RATA_W, align: 'center' })
+  y += 20
+
+  // Rows
+  const ROW_H = 14
+  siswaList.forEach((sw: any, i: number) => {
+    if (y + ROW_H > ph - 30) {
+      doc.addPage()
+      y = mt + 10
+    }
+    const bg = i % 2 === 0 ? '#f9fafb' : '#ffffff'
+    doc.rect(startX, y, tableW, ROW_H).fillAndStroke(bg, '#d1d5db')
+    doc.font(f.R).fontSize(7).fillColor('#111')
+    doc.text(String(i + 1), startX, y + 4, { width: NO_W, align: 'center' })
+    doc.font(f.B).fontSize(7).text(sw.nama, startX + NO_W + 2, y + 4, { width: NAMA_W - 4 })
+    let rx = startX + NO_W + NAMA_W
+    let total = 0, cnt = 0
+    mapelList.forEach((m: any) => {
+      const v = getNilaiAkhir(sw.id, m.id)
+      if (v !== null) { total += v; cnt++ }
+      const color = v === null ? '#999' : v >= 90 ? '#15803d' : v >= 75 ? '#1d4ed8' : v >= 60 ? '#b45309' : '#dc2626'
+      doc.font(v !== null && v >= 75 ? f.B : f.R).fontSize(7).fillColor(color)
+        .text(v !== null ? String(v) : '—', rx, y + 4, { width: mapelW, align: 'center' })
+      rx += mapelW
+    })
+    const rata = cnt > 0 ? Math.round((total / cnt) * 10) / 10 : null
+    const rataColor = rata === null ? '#999' : rata >= 75 ? '#15803d' : '#dc2626'
+    doc.font(f.B).fontSize(7.5).fillColor(rataColor).text(rata !== null ? String(rata) : '—', rx, y + 4, { width: RATA_W, align: 'center' })
+    y += ROW_H
+  })
+
+  // Mapel legend
+  y += 8
+  doc.font(f.B).fontSize(7).fillColor('#333').text('Keterangan Singkatan:', startX, y)
+  y += 10
+  mapelList.forEach((m: any, i: number) => {
+    const abbr = m.singkatan || m.nama?.split(' ').map((w: string) => w[0]).join('') || m.nama?.slice(0, 4)
+    const lx = startX + (i % 4) * (cw / 4)
+    if (i % 4 === 0 && i > 0) y += 10
+    doc.font(f.R).fontSize(7).fillColor('#555').text(`${abbr} = ${m.nama}`, lx, y, { width: cw / 4 - 5 })
+  })
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BUKU INDUK GURU — PDF format kepegawaian
+// ══════════════════════════════════════════════════════════════════════════
+function generateBukuIndukGuru(outputPath, { sekolah: s, guruList }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4 = getPaperSize(s, false)
+  const [pw, ph] = A4
+  const ml = 45, mr = 45, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4, margins: { top: 18, bottom: 30, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `buku_induk_guru_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  for (const g of guruList) {
+    doc.addPage()
+    let y = drawKopResmi(doc, s, ml, cw)
+
+    doc.font(f.B).fontSize(12).fillColor('#1e3a5f').text('BUKU INDUK GURU / TENAGA KEPENDIDIKAN', ml, y + 4, { width: cw, align: 'center' })
+    y += 36
+
+    const fotoX = ml + cw - 70
+    doc.rect(fotoX, y, 70, 85).stroke('#999')
+    if (g.foto) { try { doc.image(g.foto, fotoX + 1, y + 1, { fit: [68, 83] }) } catch {} }
+    else { doc.font(f.R).fontSize(7).fillColor('#aaa').text('Foto\n3×4', fotoX, y + 30, { width: 70, align: 'center' }) }
+
+    const FW = cw - 80, LW = 95, VW = FW - LW - 12
+
+    const drawF = (label: string, value: string) => {
+      doc.font(f.R).fontSize(8).fillColor('#555').text(label, ml, y, { width: LW })
+      doc.font(f.R).fontSize(8).fillColor('#000').text(':', ml + LW, y, { width: 8 })
+      doc.font(f.B).fontSize(8).fillColor('#000').text(value || '—', ml + LW + 10, y, { width: VW })
+      doc.moveTo(ml + LW + 10, y + 10).lineTo(ml + LW + 10 + VW, y + 10).lineWidth(0.3).stroke('#ccc')
+      y += 13
+    }
+
+    const secTitle = (t: string) => {
+      doc.font(f.B).fontSize(8.5).fillColor('#1e3a5f').text(t, ml, y, { width: FW })
+      doc.moveTo(ml, y + 11).lineTo(ml + FW, y + 11).lineWidth(0.5).stroke('#1e3a5f')
+      y += 16
+    }
+
+    secTitle('A. IDENTITAS')
+    drawF('Nama Lengkap', g.nama)
+    drawF('Jenis Kelamin', g.jk === 'L' ? 'Laki-laki' : 'Perempuan')
+    drawF('NIP', g.nip)
+    drawF('Tempat, Tgl Lahir', g.tempat_lahir && g.tgl_lahir ? `${g.tempat_lahir}, ${fmtTgl(g.tgl_lahir)}` : g.tempat_lahir || '—')
+    drawF('Agama', g.agama)
+
+    y += 4; secTitle('B. KEPEGAWAIAN')
+    drawF('Status Kepegawaian', g.status_kepegawaian)
+    drawF('Golongan', g.golongan)
+    drawF('Jabatan', g.jabatan)
+    drawF('Mata Pelajaran', g.mapel)
+    drawF('SK Pertama', g.sk_pertama)
+    drawF('TMT Pertama', fmtTgl(g.tmt_pertama))
+    drawF('Tahun Masuk', g.tahun_masuk)
+
+    y += 4; secTitle('C. PENDIDIKAN & KONTAK')
+    drawF('Pendidikan Terakhir', g.pendidikan)
+    drawF('Jurusan', g.jurusan)
+    drawF('No. HP', g.no_hp)
+    drawF('Email', g.email)
+    drawF('Alamat', g.alamat)
+
+    if (g.keterangan) { y += 4; drawF('Keterangan', g.keterangan) }
+
+    const ttdY = Math.max(y + 20, ph - 90)
+    const ttdX = ml + cw - 180
+    doc.font(f.R).fontSize(8).fillColor('#000')
+      .text(`${s.kota_sekolah || '________'}, ${fmtTgl(new Date().toISOString().slice(0, 10))}`, ttdX, ttdY, { width: 180, align: 'center' })
+      .text('Kepala Sekolah,', ttdX, ttdY + 12, { width: 180, align: 'center' })
+    doc.font(f.B).fontSize(8).text(s.kepala_sekolah || '____________________', ttdX, ttdY + 52, { width: 180, align: 'center' })
+      .font(f.R).text(`NIP. ${s.nip_kepsek || '____________________'}`, ttdX, ttdY + 62, { width: 180, align: 'center' })
+  }
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ABSENSI GURU — Rekap bulanan PDF
+// ══════════════════════════════════════════════════════════════════════════
+function generateAbsensiGuru(outputPath, { sekolah: s, rekapList, bulan }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4land = getPaperSize(s, true)
+  const [pw, ph] = A4land
+  const ml = 30, mr = 30, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4land, margins: { top: 18, bottom: 25, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `absensi_guru_${bulan?.replace('-','_') || 'all'}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  const [yr, mo] = (bulan || '').split('-')
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+  const bulanStr = mo ? `${bulanNama[parseInt(mo) - 1]} ${yr}` : 'Semua Bulan'
+
+  doc.font(f.B).fontSize(11).fillColor('#000').text('REKAP ABSENSI GURU', ml, y, { width: cw, align: 'center' })
+  y += 14
+  doc.font(f.R).fontSize(9).text(`Bulan: ${bulanStr}  |  ${s.nama_sekolah || ''}`, ml, y, { width: cw, align: 'center' })
+  y += 16
+
+  const COLS = [{ h: 'No', w: 24 }, { h: 'Nama Guru', w: 170 }, { h: 'Mapel', w: 90 }, { h: 'Hadir', w: 45 }, { h: 'Sakit', w: 45 }, { h: 'Izin', w: 45 }, { h: 'Alpha', w: 45 }, { h: 'Dinas Luar', w: 55 }, { h: 'Total', w: 40 }, { h: '% Hadir', w: 55 }]
+  const tableW = COLS.reduce((a, c) => a + c.w, 0)
+  const sx = ml + (cw - tableW) / 2
+
+  doc.rect(sx, y, tableW, 20).fillAndStroke('#1e3a5f', '#1e3a5f')
+  let hx = sx
+  COLS.forEach(c => { doc.font(f.B).fontSize(7.5).fillColor('#fff').text(c.h, hx + 1, y + 6, { width: c.w - 2, align: 'center' }); hx += c.w })
+  y += 20
+
+  rekapList.forEach((g: any, i: number) => {
+    const pct = g.total > 0 ? Math.round(((g.H + g.DL) / g.total) * 100) : 0
+    const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
+    doc.rect(sx, y, tableW, 16).fillAndStroke(bg, '#d1d5db')
+    let rx = sx
+    const vals = [String(i + 1), g.nama, g.mapel || '—', String(g.H || 0), String(g.S || 0), String(g.I || 0), String(g.A || 0), String(g.DL || 0), String(g.total || 0), `${pct}%`]
+    vals.forEach((v, ci) => {
+      const col = COLS[ci]
+      const isBold = ci === 1
+      const color = ci === 9 ? (pct >= 80 ? '#15803d' : pct >= 60 ? '#b45309' : '#dc2626') : '#111'
+      doc.font(isBold ? f.B : f.R).fontSize(7.5).fillColor(color).text(v, rx + 2, y + 4, { width: col.w - 4, align: ci === 0 || ci >= 3 ? 'center' : 'left', ellipsis: true })
+      rx += col.w
+    })
+    y += 16
+  })
+
+  // Summary
+  y += 4
+  const total = rekapList.reduce((a: any, g: any) => ({ H: a.H + (g.H || 0), S: a.S + (g.S || 0), I: a.I + (g.I || 0), A: a.A + (g.A || 0), DL: a.DL + (g.DL || 0), total: a.total + (g.total || 0) }), { H: 0, S: 0, I: 0, A: 0, DL: 0, total: 0 })
+  doc.rect(sx, y, tableW, 18).fillAndStroke('#e8f0fe', '#1e3a5f')
+  let tx = sx
+  const totVals = ['', 'TOTAL', '', String(total.H), String(total.S), String(total.I), String(total.A), String(total.DL), String(total.total), '']
+  totVals.forEach((v, ci) => { doc.font(f.B).fontSize(8).fillColor('#1e3a5f').text(v, tx + 2, y + 5, { width: COLS[ci].w - 4, align: 'center' }); tx += COLS[ci].w })
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  JADWAL PELAJARAN — PDF tabel per kelas
+// ══════════════════════════════════════════════════════════════════════════
+function generateJadwal(outputPath, { sekolah: s, kelas, jadwalList }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4land = getPaperSize(s, true)
+  const [pw, ph] = A4land
+  const ml = 30, mr = 30, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4land, margins: { top: 18, bottom: 25, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `jadwal_${kelas.nama?.replace(/\s/g,'_')}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  doc.font(f.B).fontSize(12).fillColor('#000').text('JADWAL PELAJARAN', ml, y, { width: cw, align: 'center' })
+  y += 14
+  doc.font(f.R).fontSize(9).text(`Kelas: ${kelas.nama}  |  Wali Kelas: ${kelas.wali_kelas || '—'}  |  Tahun Ajaran: ${kelas.tahun_ajaran || s.tahun_ajaran || '—'}`, ml, y, { width: cw, align: 'center' })
+  y += 18
+
+  const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu']
+  const JAM_W = 38, HARI_W = Math.floor((cw - JAM_W) / HARI.length)
+  const MAX_JAM = Math.max(...jadwalList.map((j: any) => j.jam_ke), 10)
+  const ROW_H = 36
+
+  // Header
+  doc.rect(ml, y, cw, 20).fillAndStroke('#1e3a5f', '#1e3a5f')
+  doc.font(f.B).fontSize(8).fillColor('#fff').text('Jam', ml, y + 6, { width: JAM_W, align: 'center' })
+  HARI.forEach((h, i) => doc.text(h, ml + JAM_W + i * HARI_W, y + 6, { width: HARI_W, align: 'center' }))
+  y += 20
+
+  const COLORS = ['#dbeafe', '#dcfce7', '#fef9c3', '#fce7f3', '#ede9fe', '#ffedd5']
+
+  for (let jam = 1; jam <= MAX_JAM; jam++) {
+    doc.rect(ml, y, JAM_W, ROW_H).fillAndStroke('#f3f4f6', '#d1d5db')
+    doc.font(f.B).fontSize(10).fillColor('#374151').text(String(jam), ml, y + ROW_H / 2 - 6, { width: JAM_W, align: 'center' })
+
+    HARI.forEach((hari, hi) => {
+      const j = jadwalList.find((x: any) => x.hari === hari && x.jam_ke === jam)
+      const x = ml + JAM_W + hi * HARI_W
+      const bg = j ? COLORS[hi % COLORS.length] : '#fff'
+      doc.rect(x, y, HARI_W, ROW_H).fillAndStroke(bg, '#d1d5db')
+      if (j) {
+        doc.font(f.B).fontSize(7.5).fillColor('#1e3a5f').text(j.nama_mapel || '—', x + 2, y + 4, { width: HARI_W - 4, align: 'center' })
+        doc.font(f.R).fontSize(6.5).fillColor('#555').text(j.guru || '', x + 2, y + 14, { width: HARI_W - 4, align: 'center', ellipsis: true })
+        if (j.jam_mulai) doc.font(f.R).fontSize(6).fillColor('#777').text(`${j.jam_mulai}–${j.jam_selesai}`, x + 2, y + 24, { width: HARI_W - 4, align: 'center' })
+      }
+    })
+    y += ROW_H
+  }
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  JURNAL KELAS — PDF per bulan
+// ══════════════════════════════════════════════════════════════════════════
+function generateJurnal(outputPath, { sekolah: s, kelas, jurnalList, bulan }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4 = getPaperSize(s, false)
+  const [pw, ph] = A4
+  const ml = 40, mr = 40, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4, margins: { top: 18, bottom: 30, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `jurnal_${kelas.nama?.replace(/\s/g,'_')}_${bulan?.replace('-','_') || 'all'}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  const [yr, mo] = (bulan || '').split('-')
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+  const bulanStr = mo ? `${bulanNama[parseInt(mo) - 1]} ${yr}` : 'Semua Bulan'
+
+  doc.font(f.B).fontSize(12).fillColor('#000').text('JURNAL KELAS', ml, y, { width: cw, align: 'center' })
+  y += 14
+  doc.font(f.R).fontSize(9).text(`Kelas: ${kelas.nama}  |  Wali Kelas: ${kelas.wali_kelas || '—'}  |  Bulan: ${bulanStr}`, ml, y, { width: cw, align: 'center' })
+  y += 18
+
+  const COLS = [{ h: 'Tanggal', w: 80 }, { h: 'Jam Ke', w: 40 }, { h: 'Mata Pelajaran', w: 100 }, { h: 'Guru', w: 110 }, { h: 'Materi / Kegiatan', w: 150 }, { h: 'Catatan', w: 90 }]
+  const tableW = COLS.reduce((a, c) => a + c.w, 0)
+  const sx = ml + (cw - tableW) / 2
+
+  const drawHeader = () => {
+    doc.rect(sx, y, tableW, 18).fillAndStroke('#1e3a5f', '#1e3a5f')
+    let hx = sx
+    COLS.forEach(c => { doc.font(f.B).fontSize(7.5).fillColor('#fff').text(c.h, hx + 2, y + 5, { width: c.w - 4, align: 'center' }); hx += c.w })
+    y += 18
+  }
+  drawHeader()
+
+  const ROW_H = 22
+  jurnalList.forEach((j: any, i: number) => {
+    if (y + ROW_H > ph - 40) { doc.addPage(); y = drawKopResmi(doc, s, ml, cw); drawHeader() }
+    const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
+    doc.rect(sx, y, tableW, ROW_H).fillAndStroke(bg, '#d1d5db')
+    const vals = [fmtTgl(j.tanggal), String(j.jam_ke || '—'), j.nama_mapel || '—', j.guru || '—', j.materi || '—', j.catatan || '—']
+    let rx = sx
+    vals.forEach((v, ci) => {
+      doc.font(ci === 4 || ci === 5 ? f.R : ci === 3 ? f.I : f.R).fontSize(7).fillColor('#111')
+        .text(v, rx + 2, y + 4, { width: COLS[ci].w - 4, height: ROW_H - 6, ellipsis: true })
+      rx += COLS[ci].w
+    })
+    y += ROW_H
+  })
+
+  if (jurnalList.length === 0) {
+    doc.font(f.R).fontSize(10).fillColor('#999').text('Belum ada entri jurnal.', ml, y + 20, { width: cw, align: 'center' })
+  }
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  ABSENSI SISWA — Rekap bulanan PDF per kelas
+// ══════════════════════════════════════════════════════════════════════════
+function generateAbsensiSiswa(outputPath, { sekolah: s, kelas, rekapList, bulan }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4land = getPaperSize(s, true)
+  const [pw, ph] = A4land
+  const ml = 30, mr = 30, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4land, margins: { top: 18, bottom: 25, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `absensi_siswa_${kelas.nama?.replace(/\s/g,'_')}_${bulan?.replace('-','_') || 'all'}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  const [yr, mo] = (bulan || '').split('-')
+  const bulanNama = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+  const bulanStr = mo ? `${bulanNama[parseInt(mo) - 1]} ${yr}` : 'Semua Bulan'
+
+  doc.font(f.B).fontSize(11).fillColor('#000').text('REKAP ABSENSI SISWA', ml, y, { width: cw, align: 'center' })
+  y += 14
+  doc.font(f.R).fontSize(9).text(`Kelas: ${kelas.nama}  |  Wali Kelas: ${kelas.wali_kelas || '—'}  |  Bulan: ${bulanStr}`, ml, y, { width: cw, align: 'center' })
+  y += 16
+
+  const COLS = [{ h: 'No', w: 24 }, { h: 'Nama Siswa', w: 180 }, { h: 'L/P', w: 30 }, { h: 'Hadir', w: 45 }, { h: 'Sakit', w: 45 }, { h: 'Izin', w: 45 }, { h: 'Alpha', w: 45 }, { h: 'Total', w: 40 }, { h: '% Hadir', w: 55 }]
+  const tableW = COLS.reduce((a, c) => a + c.w, 0)
+  const sx = ml + (cw - tableW) / 2
+
+  doc.rect(sx, y, tableW, 20).fillAndStroke('#1e3a5f', '#1e3a5f')
+  let hx = sx
+  COLS.forEach(c => { doc.font(f.B).fontSize(7.5).fillColor('#fff').text(c.h, hx + 1, y + 6, { width: c.w - 2, align: 'center' }); hx += c.w })
+  y += 20
+
+  rekapList.forEach((sw: any, i: number) => {
+    const pct = sw.total > 0 ? Math.round((sw.H / sw.total) * 100) : 0
+    const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
+    doc.rect(sx, y, tableW, 16).fillAndStroke(bg, '#d1d5db')
+    let rx = sx
+    const vals = [String(i + 1), sw.nama, sw.jk || '—', String(sw.H || 0), String(sw.S || 0), String(sw.I || 0), String(sw.A || 0), String(sw.total || 0), `${pct}%`]
+    vals.forEach((v, ci) => {
+      const color = ci === 8 ? (pct >= 80 ? '#15803d' : pct >= 60 ? '#b45309' : '#dc2626') : '#111'
+      doc.font(ci <= 1 ? f.B : f.R).fontSize(7.5).fillColor(color).text(v, rx + 2, y + 4, { width: COLS[ci].w - 4, align: ci === 0 || ci >= 3 ? 'center' : 'left', ellipsis: true })
+      rx += COLS[ci].w
+    })
+    y += 16
+  })
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  SURAT-SURAT — Cetak PDF resmi
+// ══════════════════════════════════════════════════════════════════════════
+function generateSurat(outputPath, { sekolah: s, siswa, jenis, noSurat, keperluan, angkatan }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const A4 = getPaperSize(s, false)
+  const [pw, ph] = A4
+  const ml = 55, mr = 55, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4, margins: { top: 18, bottom: 40, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `surat_${jenis}_${siswa.id}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  const drawField = (label: string, value: string, lw = 120) => {
+    doc.font(f.R).fontSize(10).fillColor('#000')
+      .text(label, ml + 20, y, { width: lw })
+      .text(':', ml + 20 + lw, y, { width: 10 })
+      .font(f.B).text(value || '—', ml + 20 + lw + 12, y, { width: cw - lw - 32 })
+    y += 14
+  }
+
+  const JUDUL: Record<string, string> = {
+    aktif: 'SURAT KETERANGAN MASIH AKTIF BELAJAR',
+    mutasi: 'SURAT KETERANGAN PINDAH SEKOLAH',
+    panggilan: 'SURAT PANGGILAN ORANG TUA / WALI MURID',
+    kartu_ujian: 'KARTU PESERTA UJIAN',
+  }
+
+  const tglCetak = fmtTgl(new Date().toISOString().slice(0, 10))
+
+  if (jenis === 'kartu_ujian') {
+    // Layout kartu ujian khusus
+    doc.font(f.B).fontSize(13).fillColor('#1e3a5f').text(JUDUL.kartu_ujian, ml, y, { width: cw, align: 'center' })
+    y += 18
+    doc.font(f.R).fontSize(9).text(`${s.nama_sekolah || ''}  |  ${angkatan?.nama || s.tahun_ajaran || ''}`, ml, y, { width: cw, align: 'center' })
+    y += 20
+    doc.rect(ml + 20, y, cw - 40, 120).stroke('#1e3a5f').lineWidth(2)
+    const inner = ml + 30
+    const innerW = cw - 60
+    const fotoBox = innerW - 90
+    // Foto
+    doc.rect(inner + fotoBox, y + 8, 80, 100).stroke('#999')
+    if (siswa.foto) { try { doc.image(siswa.foto, inner + fotoBox + 1, y + 9, { fit: [78, 98] }) } catch {} }
+    else { doc.font(f.R).fontSize(7).fillColor('#aaa').text('Foto 3×4', inner + fotoBox, y + 45, { width: 80, align: 'center' }) }
+    let fy = y + 12
+    ;[['Nama', siswa.nama], ['NISN', siswa.nisn], ['NIS', siswa.nism], ['Kelas', siswa.kelas], ['Tgl Lahir', fmtTgl(siswa.tgl_lahir)]].forEach(([l, v]) => {
+      doc.font(f.R).fontSize(9).fillColor('#555').text(l as string, inner, fy, { width: 70 })
+      doc.font(f.R).text(':', inner + 70, fy, { width: 8 })
+      doc.font(f.B).fontSize(9).fillColor('#000').text(v || '—', inner + 80, fy, { width: fotoBox - 82 })
+      fy += 13
+    })
+    y += 130
+    doc.font(f.B).fontSize(11).fillColor('#1e3a5f').text(`No. Peserta: ${noSurat || '—————————'}`, ml, y + 10, { width: cw, align: 'center' })
+    y += 30
+    const ttdX2 = ml + cw - 160
+    doc.font(f.R).fontSize(9).text(tglCetak, ttdX2, y, { width: 160, align: 'center' })
+    doc.text('Kepala Sekolah,', ttdX2, y + 12, { width: 160, align: 'center' })
+    doc.font(f.B).text(s.kepala_sekolah || '____________________', ttdX2, y + 60, { width: 160, align: 'center' })
+    doc.font(f.R).text(`NIP. ${s.nip_kepsek || '____________________'}`, ttdX2, y + 72, { width: 160, align: 'center' })
+  } else {
+    // Layout surat biasa
+    doc.font(f.B).fontSize(12).fillColor('#000').text(JUDUL[jenis] || 'SURAT KETERANGAN', ml, y, { width: cw, align: 'center' })
+    y += 14
+    doc.font(f.R).fontSize(10).text(`Nomor: ${noSurat || '    .../  /.../  /...'}`, ml, y, { width: cw, align: 'center' })
+    y += 24
+
+    if (jenis === 'panggilan') {
+      doc.font(f.R).fontSize(10).fillColor('#000')
+        .text('Kepada Yth.', ml, y).moveDown(0.3)
+        .font(f.B).text(`Orang Tua/Wali dari: ${siswa.nama}`, ml).moveDown(0.3)
+        .font(f.R).text('Di Tempat', ml)
+      y = doc.y + 16
+      doc.font(f.R).fontSize(10).text('Dengan hormat,', ml, y)
+      y += 18
+      doc.font(f.R).fontSize(10)
+        .text(`Bersama surat ini kami mengundang Bapak/Ibu Orang Tua/Wali dari peserta didik kami:`, ml, y, { width: cw })
+      y = doc.y + 10
+    } else {
+      doc.font(f.R).fontSize(10).text(`Yang bertanda tangan di bawah ini, Kepala ${s.nama_sekolah || 'Sekolah'} menerangkan bahwa:`, ml, y, { width: cw })
+      y = doc.y + 12
+    }
+
+    drawField('Nama Lengkap', siswa.nama)
+    drawField('NISN', siswa.nisn)
+    drawField('NIS / NISM', siswa.nism)
+    drawField('Tempat, Tanggal Lahir', siswa.tempat_lahir && siswa.tgl_lahir ? `${siswa.tempat_lahir}, ${fmtTgl(siswa.tgl_lahir)}` : siswa.tempat_lahir || '—')
+    drawField('Kelas', siswa.kelas)
+    drawField('Tahun Pelajaran', angkatan?.nama || s.tahun_ajaran || '—')
+    y += 6
+
+    if (jenis === 'aktif') {
+      doc.font(f.R).fontSize(10).fillColor('#000')
+        .text(`Adalah benar siswa/siswi tersebut di atas `, ml, y, { continued: true })
+        .font(f.B).text('MASIH AKTIF BELAJAR ', { continued: true })
+        .font(f.R).text(`di ${s.nama_sekolah || 'sekolah kami'}${keperluan ? ', dan surat ini dibuat untuk keperluan ' : ''}.`)
+      if (keperluan) { doc.font(f.B).text(keperluan + '.', { continued: false }) }
+    } else if (jenis === 'mutasi') {
+      doc.font(f.R).fontSize(10).fillColor('#000')
+        .text(`Adalah benar siswa/siswi tersebut di atas `, ml, y, { continued: true })
+        .font(f.B).text('TELAH PINDAH / KELUAR ', { continued: true })
+        .font(f.R).text(`dari ${s.nama_sekolah || 'sekolah kami'}${keperluan ? ' dengan alasan: ' : ''}.`)
+      if (keperluan) { doc.font(f.B).text(keperluan + '.') }
+    } else if (jenis === 'panggilan') {
+      doc.font(f.R).fontSize(10).fillColor('#000')
+        .text(`Untuk hadir di sekolah guna membicarakan hal-hal yang berkaitan dengan: `, ml, y, { continued: true })
+        .font(f.B).text(keperluan || '____________________', { continued: false })
+      y = doc.y + 10
+      doc.font(f.R).fontSize(10).text('Adapun waktu pelaksanaannya adalah:', ml, y)
+      y = doc.y + 8
+      ;[['Hari, Tanggal', '____________________'], ['Pukul', '____________________'], ['Tempat', s.nama_sekolah || '____________________']].forEach(([l, v]) => {
+        drawField(l, v, 100)
+      })
+    }
+
+    y = doc.y + 20
+    doc.font(f.R).fontSize(10).fillColor('#000')
+      .text('Demikian surat keterangan ini kami buat dengan sebenarnya dan untuk dapat dipergunakan sebagaimana mestinya.', ml, y, { width: cw })
+    y = doc.y + 30
+
+    const ttdX = ml + cw - 180
+    doc.font(f.R).fontSize(10).text(`${s.kota_sekolah || '________'}, ${tglCetak}`, ttdX, y, { width: 180, align: 'center' })
+    doc.text(`Kepala ${s.nama_sekolah || 'Sekolah'},`, ttdX, y + 14, { width: 180, align: 'center' })
+    doc.font(f.B).text(s.kepala_sekolah || '____________________', ttdX, y + 65, { width: 180, align: 'center' })
+    doc.font(f.R).text(`NIP. ${s.nip_kepsek || '____________________'}`, ttdX, y + 77, { width: 180, align: 'center' })
+  }
+
+  doc.end()
+  return fn
 }
