@@ -3,6 +3,35 @@ const api = (window as any).api
 export const authApi = {
   login: (email: string, password: string) => api?.auth.login(email, password) ?? null,
 }
+export const kelasApi = {
+  list:   ()        => api?.kelas.list(),
+  get:    (id:number) => api?.kelas.get(id),
+  add:    (d:any)   => api?.kelas.add(d),
+  update: (id:number, d:any) => api?.kelas.update(id, d),
+  delete: (id:number) => api?.kelas.delete(id),
+  siswa:  (id:number) => api?.kelas.siswa(id),
+}
+export const denahApi = {
+  get:  (kelas_id:number)               => api?.denah.get(kelas_id),
+  save: (kelas_id:number, seats:any[])  => api?.denah.save(kelas_id, seats),
+  auto: (kelas_id:number)               => api?.denah.auto(kelas_id),
+}
+export const jadwalApi = {
+  get:  (kelas_id:number)              => api?.jadwal.get(kelas_id),
+  save: (kelas_id:number, rows:any[])  => api?.jadwal.save(kelas_id, rows),
+}
+export const jurnalApi = {
+  list:   (kelas_id:number, bulan?:string) => api?.jurnal.list(kelas_id, bulan),
+  add:    (d:any)          => api?.jurnal.add(d),
+  update: (id:number, d:any) => api?.jurnal.update(id, d),
+  delete: (id:number)      => api?.jurnal.delete(id),
+}
+export const absensiApi = {
+  get:   (kelas_id:number, tanggal:string)           => api?.absensi.get(kelas_id, tanggal),
+  save:  (kelas_id:number, tanggal:string, rows:any[]) => api?.absensi.save(kelas_id, tanggal, rows),
+  rekap: (kelas_id:number, bulan?:string)            => api?.absensi.rekap(kelas_id, bulan),
+}
+
 export const sekolahApi = {
   get:        ()              => api?.sekolah.get(),
   save:       (d:any)         => api?.sekolah.save(d),
