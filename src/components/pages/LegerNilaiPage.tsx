@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TableProperties, ChevronLeft, Download } from 'lucide-react'
 import { PageHeader } from '../ui'
-import { legerApi, kelasApi } from '../../lib/api'
+import { legerApi, kelasApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 export function LegerNilaiPage({ showToast }: { showToast: (msg: string, type?: any) => void }) {
@@ -9,6 +9,7 @@ export function LegerNilaiPage({ showToast }: { showToast: (msg: string, type?: 
   const [kelas, setKelas] = useState<any>(null)
   const [leger, setLeger] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [viewSem, setViewSem] = useState<'raport'|'ujian'|'akhir'>('akhir')
 
   useEffect(() => {
@@ -86,9 +87,9 @@ export function LegerNilaiPage({ showToast }: { showToast: (msg: string, type?: 
     <div className="space-y-4">
       <PageHeader title="Leger Nilai Kelas" subtitle={`Kelas ${kelas.nama}`}
         actions={
-          <button onClick={() => window.print()}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700">
-            <Download className="w-4 h-4" /> Cetak
+          <button onClick={async()=>{setPrinting(true);const r:any=await pdfCetakApi.leger(kelas.id);if(!r?.ok)alert(r?.error||'Gagal');setPrinting(false)}}
+            disabled={printing} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 disabled:opacity-50">
+            <Download className="w-4 h-4"/> {printing?'Membuat PDF...':'Cetak PDF Leger'}
           </button>
         }
       />
