@@ -92,6 +92,63 @@ function initDB() {
       angkatan_id INTEGER NOT NULL, siswa_id INTEGER NOT NULL,
       UNIQUE(angkatan_id, siswa_id)
     );
+
+    -- ── MODUL WALI KELAS ────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS kelas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama TEXT NOT NULL,
+      tingkat TEXT,
+      tahun_ajaran TEXT,
+      wali_kelas TEXT,
+      angkatan_id INTEGER,
+      kapasitas INTEGER DEFAULT 32
+    );
+
+    CREATE TABLE IF NOT EXISTS denah_tempat_duduk (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kelas_id INTEGER NOT NULL,
+      baris INTEGER NOT NULL,
+      kolom INTEGER NOT NULL,
+      siswa_id INTEGER,
+      label TEXT,
+      UNIQUE(kelas_id, baris, kolom)
+    );
+
+    CREATE TABLE IF NOT EXISTS jadwal_pelajaran (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kelas_id INTEGER NOT NULL,
+      hari TEXT NOT NULL,
+      jam_ke INTEGER NOT NULL,
+      jam_mulai TEXT,
+      jam_selesai TEXT,
+      mapel_id INTEGER,
+      nama_mapel TEXT,
+      guru TEXT,
+      ruangan TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS jurnal_kelas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kelas_id INTEGER NOT NULL,
+      tanggal TEXT NOT NULL,
+      jam_ke INTEGER,
+      mapel_id INTEGER,
+      nama_mapel TEXT,
+      guru TEXT,
+      materi TEXT,
+      catatan TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS absensi_harian (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kelas_id INTEGER NOT NULL,
+      siswa_id INTEGER NOT NULL,
+      tanggal TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'H',
+      keterangan TEXT,
+      UNIQUE(kelas_id, siswa_id, tanggal)
+    );
   `)
 
   // Migrasi kolom lama jika belum ada
@@ -573,6 +630,149 @@ function registerIPC() {
   ipcMain.handle('angkatan:update', (_, id, d) => { db.prepare('UPDATE angkatan SET nama=?,tahun_lulus=?,keterangan=?,is_aktif=? WHERE id=?').run(d.nama,d.tahun_lulus,d.keterangan,d.is_aktif,id); return true })
   ipcMain.handle('angkatan:delete', (_, id) => { db.prepare('DELETE FROM angkatan_siswa WHERE angkatan_id=?').run(id); db.prepare('DELETE FROM angkatan WHERE id=?').run(id); return true })
   ipcMain.handle('angkatan:siswa', (_, id) => db.prepare('SELECT s.*, (SELECT COUNT(*) FROM nilai n WHERE n.siswa_id=s.id) jml_nilai FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(id))
+
+  // ── KELAS ─────────────────────────────────────────────────────────────
+  ipcMain.handle('kelas:list', () => db.prepare('SELECT * FROM kelas ORDER BY tingkat, nama').all())
+  ipcMain.handle('kelas:get', (_, id) => db.prepare('SELECT * FROM kelas WHERE id=?').get(id))
+  ipcMain.handle('kelas:add', (_, d) => {
+    const r = db.prepare('INSERT INTO kelas(nama,tingkat,tahun_ajaran,wali_kelas,angkatan_id,kapasitas) VALUES(?,?,?,?,?,?)').run(d.nama,d.tingkat||'',d.tahun_ajaran||'',d.wali_kelas||'',d.angkatan_id||null,d.kapasitas||32)
+    return { ok: true, id: r.lastInsertRowid }
+  })
+  ipcMain.handle('kelas:update', (_, id, d) => {
+    db.prepare('UPDATE kelas SET nama=?,tingkat=?,tahun_ajaran=?,wali_kelas=?,angkatan_id=?,kapasitas=? WHERE id=?').run(d.nama,d.tingkat||'',d.tahun_ajaran||'',d.wali_kelas||'',d.angkatan_id||null,d.kapasitas||32,id)
+    return { ok: true }
+  })
+  ipcMain.handle('kelas:delete', (_, id) => {
+    db.prepare('DELETE FROM denah_tempat_duduk WHERE kelas_id=?').run(id)
+    db.prepare('DELETE FROM jadwal_pelajaran WHERE kelas_id=?').run(id)
+    db.prepare('DELETE FROM jurnal_kelas WHERE kelas_id=?').run(id)
+    db.prepare('DELETE FROM absensi_harian WHERE kelas_id=?').run(id)
+    db.prepare('DELETE FROM kelas WHERE id=?').run(id)
+    return { ok: true }
+  })
+  ipcMain.handle('kelas:siswa', (_, kelas_id) => {
+    const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+    if (!k) return []
+    if (k.angkatan_id) {
+      return db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(k.angkatan_id)
+    }
+    return db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+  })
+
+  // ── DENAH TEMPAT DUDUK ────────────────────────────────────────────────
+  ipcMain.handle('denah:get', (_, kelas_id) => db.prepare('SELECT d.*,s.nama as nama_siswa,s.jk FROM denah_tempat_duduk d LEFT JOIN siswa s ON s.id=d.siswa_id WHERE d.kelas_id=? ORDER BY d.baris,d.kolom').all(kelas_id))
+  ipcMain.handle('denah:save', (_, kelas_id, seats) => {
+    const del = db.prepare('DELETE FROM denah_tempat_duduk WHERE kelas_id=?')
+    const ins = db.prepare('INSERT INTO denah_tempat_duduk(kelas_id,baris,kolom,siswa_id,label) VALUES(?,?,?,?,?)')
+    const tx = db.transaction(() => {
+      del.run(kelas_id)
+      for (const s of seats) ins.run(kelas_id, s.baris, s.kolom, s.siswa_id||null, s.label||null)
+    })
+    tx()
+    return { ok: true }
+  })
+  ipcMain.handle('denah:auto', (_, kelas_id) => {
+    const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+    if (!k) return { ok: false }
+    let siswa = []
+    if (k.angkatan_id) {
+      siswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY s.nama').all(k.angkatan_id)
+    } else {
+      siswa = db.prepare('SELECT * FROM siswa ORDER BY nama').all()
+    }
+    const kap = k.kapasitas || 32
+    const cols = 6
+    const rows = Math.ceil(kap / cols)
+    const del = db.prepare('DELETE FROM denah_tempat_duduk WHERE kelas_id=?')
+    const ins = db.prepare('INSERT INTO denah_tempat_duduk(kelas_id,baris,kolom,siswa_id) VALUES(?,?,?,?)')
+    const tx = db.transaction(() => {
+      del.run(kelas_id)
+      let i = 0
+      for (let r = 1; r <= rows; r++) {
+        for (let c = 1; c <= cols; c++) {
+          if ((r-1)*cols + c > kap) break
+          ins.run(kelas_id, r, c, siswa[i]?.id || null)
+          i++
+        }
+      }
+    })
+    tx()
+    return { ok: true }
+  })
+
+  // ── JADWAL PELAJARAN ─────────────────────────────────────────────────
+  ipcMain.handle('jadwal:get', (_, kelas_id) => db.prepare('SELECT * FROM jadwal_pelajaran WHERE kelas_id=? ORDER BY CASE hari WHEN "Senin" THEN 1 WHEN "Selasa" THEN 2 WHEN "Rabu" THEN 3 WHEN "Kamis" THEN 4 WHEN "Jumat" THEN 5 WHEN "Sabtu" THEN 6 ELSE 7 END, jam_ke').all(kelas_id))
+  ipcMain.handle('jadwal:save', (_, kelas_id, rows) => {
+    const del = db.prepare('DELETE FROM jadwal_pelajaran WHERE kelas_id=?')
+    const ins = db.prepare('INSERT INTO jadwal_pelajaran(kelas_id,hari,jam_ke,jam_mulai,jam_selesai,mapel_id,nama_mapel,guru,ruangan) VALUES(?,?,?,?,?,?,?,?,?)')
+    const tx = db.transaction(() => {
+      del.run(kelas_id)
+      for (const r of rows) ins.run(kelas_id,r.hari,r.jam_ke,r.jam_mulai||'',r.jam_selesai||'',r.mapel_id||null,r.nama_mapel||'',r.guru||'',r.ruangan||'')
+    })
+    tx()
+    return { ok: true }
+  })
+
+  // ── JURNAL KELAS ──────────────────────────────────────────────────────
+  ipcMain.handle('jurnal:list', (_, kelas_id, bulan) => {
+    if (bulan) return db.prepare("SELECT * FROM jurnal_kelas WHERE kelas_id=? AND strftime('%Y-%m',tanggal)=? ORDER BY tanggal,jam_ke").all(kelas_id, bulan)
+    return db.prepare('SELECT * FROM jurnal_kelas WHERE kelas_id=? ORDER BY tanggal DESC,jam_ke').all(kelas_id)
+  })
+  ipcMain.handle('jurnal:add', (_, d) => {
+    const r = db.prepare('INSERT INTO jurnal_kelas(kelas_id,tanggal,jam_ke,mapel_id,nama_mapel,guru,materi,catatan) VALUES(?,?,?,?,?,?,?,?)').run(d.kelas_id,d.tanggal,d.jam_ke||null,d.mapel_id||null,d.nama_mapel||'',d.guru||'',d.materi||'',d.catatan||'')
+    return { ok: true, id: r.lastInsertRowid }
+  })
+  ipcMain.handle('jurnal:update', (_, id, d) => {
+    db.prepare('UPDATE jurnal_kelas SET tanggal=?,jam_ke=?,mapel_id=?,nama_mapel=?,guru=?,materi=?,catatan=? WHERE id=?').run(d.tanggal,d.jam_ke||null,d.mapel_id||null,d.nama_mapel||'',d.guru||'',d.materi||'',d.catatan||'',id)
+    return { ok: true }
+  })
+  ipcMain.handle('jurnal:delete', (_, id) => { db.prepare('DELETE FROM jurnal_kelas WHERE id=?').run(id); return { ok: true } })
+
+  // ── ABSENSI HARIAN ────────────────────────────────────────────────────
+  ipcMain.handle('absensi:get', (_, kelas_id, tanggal) => {
+    const siswa = []
+    const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+    if (!k) return []
+    let sw = []
+    if (k.angkatan_id) {
+      sw = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(k.angkatan_id)
+    } else {
+      sw = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    for (const s of sw) {
+      const abs = db.prepare('SELECT * FROM absensi_harian WHERE kelas_id=? AND siswa_id=? AND tanggal=?').get(kelas_id, s.id, tanggal)
+      siswa.push({ ...s, status: abs?.status || 'H', keterangan: abs?.keterangan || '' })
+    }
+    return siswa
+  })
+  ipcMain.handle('absensi:save', (_, kelas_id, tanggal, rows) => {
+    const upsert = db.prepare('INSERT INTO absensi_harian(kelas_id,siswa_id,tanggal,status,keterangan) VALUES(?,?,?,?,?) ON CONFLICT(kelas_id,siswa_id,tanggal) DO UPDATE SET status=excluded.status,keterangan=excluded.keterangan')
+    const tx = db.transaction(() => { for (const r of rows) upsert.run(kelas_id,r.siswa_id,tanggal,r.status,r.keterangan||'') })
+    tx()
+    return { ok: true }
+  })
+  ipcMain.handle('absensi:rekap', (_, kelas_id, bulan) => {
+    const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+    if (!k) return []
+    let sw = []
+    if (k.angkatan_id) {
+      sw = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(k.angkatan_id)
+    } else {
+      sw = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    const result = []
+    for (const s of sw) {
+      let q = "SELECT status, COUNT(*) as jml FROM absensi_harian WHERE kelas_id=? AND siswa_id=?"
+      const params = [kelas_id, s.id]
+      if (bulan) { q += " AND strftime('%Y-%m',tanggal)=?"; params.push(bulan) }
+      q += " GROUP BY status"
+      const rows = db.prepare(q).all(...params)
+      const r = { H:0, S:0, I:0, A:0 }
+      for (const row of rows) r[row.status] = (r[row.status]||0) + row.jml
+      result.push({ ...s, ...r, total: r.H+r.S+r.I+r.A })
+    }
+    return result
+  })
   ipcMain.handle('angkatan:tambah_siswa', (_, id, ids) => { const ins=db.prepare('INSERT OR IGNORE INTO angkatan_siswa(angkatan_id,siswa_id) VALUES(?,?)'); const tx=db.transaction(list=>list.forEach(sid=>ins.run(id,sid))); tx(ids); return true })
   ipcMain.handle('angkatan:hapus_siswa', (_, id, ids) => { const del=db.prepare('DELETE FROM angkatan_siswa WHERE angkatan_id=? AND siswa_id=?'); const tx=db.transaction(list=>list.forEach(sid=>del.run(id,sid))); tx(ids); return true })
 
