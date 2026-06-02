@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Mail, Plus, Printer, Search, FileText, Users, ArrowRight, Clock } from 'lucide-react'
 import { Button, Modal, Input, Select, SearchBar, PageHeader, Badge } from '../ui'
-import { siswaApi, suratApi, sekolahApi } from '../../lib/api'
+import { siswaApi, suratApi, sekolahApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 type JenisSurat = 'aktif' | 'mutasi' | 'panggilan' | 'kartu_ujian'
@@ -211,12 +211,12 @@ export function SuratPage({ showToast }: { showToast: (msg: string, type?: any) 
   }
 
   const handlePrint = async () => {
-    await suratApi.saveLog({
-      jenis, siswa_id: selectedSiswa?.id, no_surat: noSurat,
-      perihal: JENIS_LABEL[jenis], tanggal: today(), keterangan: keperluan
+    if (!selectedSiswa) return
+    const r: any = await pdfCetakApi.surat({
+      siswa_id: selectedSiswa.id, jenis, noSurat, keperluan
     })
-    window.print()
-    showToast('Surat dicetak dan log tersimpan')
+    if (!r?.ok) showToast(r?.error || 'Gagal cetak PDF', 'error')
+    else { showToast('Surat PDF dibuka'); setPreview(null) }
   }
 
   const JENIS_LIST: { key: JenisSurat; icon: string; desc: string }[] = [
