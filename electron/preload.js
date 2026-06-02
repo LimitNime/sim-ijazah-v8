@@ -94,6 +94,52 @@ contextBridge.exposeInMainWorld('api', {
     ijazahSiswa:      id => invoke('pdf:ijazah_siswa', id),
     skkbSiswa:        id => invoke('pdf:skkb_siswa', id),
   },
+  kleper: {
+    list:     q      => invoke('kleper:list', q),
+    byHuruf:  huruf  => invoke('kleper:by_huruf', huruf),
+  },
+  guru: {
+    list:       q      => invoke('guru:list', q),
+    get:        id     => invoke('guru:get', id),
+    add:        d      => invoke('guru:add', d),
+    update:     (id,d) => invoke('guru:update', id, d),
+    delete:     id     => invoke('guru:delete', id),
+    uploadFoto: id     => invoke('guru:upload_foto', id),
+  },
+  absensiGuru: {
+    get:   tanggal        => invoke('absensi_guru:get', tanggal),
+    save:  (tanggal,rows) => invoke('absensi_guru:save', tanggal, rows),
+    rekap: bulan          => invoke('absensi_guru:rekap', bulan),
+  },
+  jamMengajar: {
+    list:   ta     => invoke('jam_mengajar:list', ta),
+    save:   d      => invoke('jam_mengajar:save', d),
+    delete: id     => invoke('jam_mengajar:delete', id),
+  },
+  skTugas: {
+    list:   ()  => invoke('sk_tugas:list'),
+    save:   d   => invoke('sk_tugas:save', d),
+    delete: id  => invoke('sk_tugas:delete', id),
+  },
+  pdfCetak: {
+    bukuKleper:     ()                    => invoke('pdf:buku_kleper'),
+    bukuIndukSiswa: (angkatan_id)         => invoke('pdf:buku_induk_siswa', angkatan_id),
+    leger:          (kelas_id)            => invoke('pdf:leger', kelas_id),
+    bukuIndukGuru:  ()                    => invoke('pdf:buku_induk_guru'),
+    absensiGuru:    (bulan)               => invoke('pdf:absensi_guru', bulan),
+    jadwal:         (kelas_id)            => invoke('pdf:jadwal', kelas_id),
+    jurnal:         (kelas_id, bulan)     => invoke('pdf:jurnal', kelas_id, bulan),
+    absensiSiswa:   (kelas_id, bulan)     => invoke('pdf:absensi_siswa', kelas_id, bulan),
+    surat:          (params)              => invoke('pdf:surat', params),
+  },
+  leger: {
+    get: kelas_id => invoke('leger:get', kelas_id),
+  },
+  surat: {
+    getSiswa:  id  => invoke('surat:get_siswa', id),
+    list:      ()  => invoke('surat:list'),
+    saveLog:   d   => invoke('surat:save_log', d),
+  },
   kelas: {
     list:    ()        => invoke('kelas:list'),
     get:     id        => invoke('kelas:get', id),
