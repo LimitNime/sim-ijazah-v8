@@ -2051,8 +2051,8 @@ function generateBukuKleper(outputPath, { sekolah: s, siswaList }) {
     const bg = ALPHABET.indexOf(letter) % 2 === 0 ? '#f3f4f6' : '#fff'
     doc.rect(sx, y, sumW, 16).fillAndStroke(bg, '#d1d5db')
     let cx2 = sx
-    const jl = rows.filter((sw: any) => sw.jk === 'L').length
-    const jp = rows.filter((sw: any) => sw.jk === 'P').length
+    const jl = rows.filter((sw) => sw.jk === 'L').length
+    const jp = rows.filter((sw) => sw.jk === 'P').length
     ;[letter, String(rows.length), String(jl), String(jp)].forEach((v, i) => {
       doc.font(f.R).fontSize(8).fillColor('#111').text(v, cx2 + 2, y + 4, { width: cols[i][1] - 4, align: 'center' })
       cx2 += cols[i][1]
@@ -2116,7 +2116,7 @@ function generateBukuInduk(outputPath, { sekolah: s, siswaList }) {
 
     const FW = cw - fotoSize - 10
     const LW = 90, VW = FW - LW - 12
-    const sec = (title: string) => {
+    const sec = (title) => {
       doc.font(f.B).fontSize(8).fillColor('#1e3a5f').text(title, ml, y, { width: FW })
       doc.moveTo(ml, y + 10).lineTo(ml + FW, y + 10).lineWidth(0.5).stroke('#1e3a5f')
       y += 14
@@ -2130,31 +2130,31 @@ function generateBukuInduk(outputPath, { sekolah: s, siswaList }) {
       ['Tempat Lahir', sw.tempat_lahir], ['Tanggal Lahir', fmtTgl(sw.tgl_lahir)],
       ['Agama', sw.agama], ['Anak Ke', sw.anak_ke], ['Jumlah Saudara', sw.jml_saudara], ['Status Anak', sw.status_anak],
     ]
-    identitas.forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+    identitas.forEach(([l, v]) => { drawField(doc, l, v, ml, y, LW, VW); y += 13 })
 
     y += 6; sec('B. ALAMAT SISWA')
     ;[['Alamat', sw.alamat], ['RT / RW', sw.rt && sw.rw ? `${sw.rt} / ${sw.rw}` : sw.rt || ''],
       ['Kelurahan/Desa', sw.kelurahan], ['Kecamatan', sw.kecamatan],
       ['Kabupaten/Kota', sw.kabupaten], ['Provinsi', sw.provinsi],
       ['Kode Pos', sw.kode_pos], ['No. HP Siswa', sw.no_hp],
-    ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+    ].forEach(([l, v]) => { drawField(doc, l, v, ml, y, LW, VW); y += 13 })
 
     y += 6; sec('C. DATA ORANG TUA')
     ;[['Nama Ayah', sw.nama_ayah], ['Pekerjaan Ayah', sw.pekerjaan_ayah], ['Pendidikan Ayah', sw.pendidikan_ayah],
       ['Nama Ibu', sw.nama_ibu], ['Pekerjaan Ibu', sw.pekerjaan_ibu], ['Pendidikan Ibu', sw.pendidikan_ibu],
       ['No. HP Ortu', sw.no_hp_ortu], ['Alamat Ortu', sw.alamat_ortu],
-    ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+    ].forEach(([l, v]) => { drawField(doc, l, v, ml, y, LW, VW); y += 13 })
 
     if (sw.nama_wali) {
       y += 6; sec('D. DATA WALI')
       ;[['Nama Wali', sw.nama_wali], ['Pekerjaan Wali', sw.pekerjaan_wali], ['No. HP Wali', sw.no_hp_wali],
-      ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+      ].forEach(([l, v]) => { drawField(doc, l, v, ml, y, LW, VW); y += 13 })
     }
 
     y += 6; sec('E. RIWAYAT SEKOLAH')
     ;[['Asal Sekolah', sw.asal_sekolah], ['Tahun Masuk', sw.tahun_masuk],
       ['Kelas', sw.kelas], ['No. Induk', sw.no_induk],
-    ].forEach(([l, v]) => { drawField(doc, l as string, v as string, ml, y, LW, VW); y += 13 })
+    ].forEach(([l, v]) => { drawField(doc, l, v, ml, y, LW, VW); y += 13 })
 
     if (sw.keterangan) {
       y += 6
@@ -2193,9 +2193,9 @@ function generateLeger(outputPath, { sekolah: s, kelas, siswaList, mapelList, ni
   doc.pipe(fs.createWriteStream(fn))
   const f = fontSetup(doc, s)
 
-  const getNilaiAkhir = (siswaId: number, mapelId: number) => {
-    const nilaiRaport = raportSems.map((sem: any) => nilaiMap[`${siswaId}_${mapelId}_${sem.id}`]?.nilai_raport ?? null).filter((v: any) => v !== null)
-    const avgR = nilaiRaport.length ? nilaiRaport.reduce((a: number, b: number) => a + b, 0) / nilaiRaport.length : null
+  const getNilaiAkhir = (siswaId, mapelId) => {
+    const nilaiRaport = raportSems.map((sem) => nilaiMap[`${siswaId}_${mapelId}_${sem.id}`]?.nilai_raport ?? null).filter((v) => v !== null)
+    const avgR = nilaiRaport.length ? nilaiRaport.reduce((a, b) => a + b, 0) / nilaiRaport.length : null
     const nilaiU = ujianSem ? (nilaiMap[`${siswaId}_${mapelId}_${ujianSem.id}`]?.nilai_raport ?? null) : null
     if (avgR === null && nilaiU === null) return null
     return Math.round(((avgR ?? 0) * br + (nilaiU ?? 0) * bu) / totalB * 10) / 10
@@ -2247,8 +2247,8 @@ function generateLeger(outputPath, { sekolah: s, kelas, siswaList, mapelList, ni
   doc.text('No', startX, y + 6, { width: NO_W, align: 'center' })
   doc.text('Nama Siswa', startX + NO_W, y + 6, { width: NAMA_W, align: 'center' })
   let hx = startX + NO_W + NAMA_W
-  mapelList.forEach((m: any) => {
-    const abbr = m.singkatan || m.nama?.split(' ').map((w: string) => w[0]).join('') || m.nama?.slice(0, 4)
+  mapelList.forEach((m) => {
+    const abbr = m.singkatan || m.nama?.split(' ').map((w) => w[0]).join('') || m.nama?.slice(0, 4)
     doc.text(abbr, hx, y + 2, { width: mapelW, align: 'center' })
     hx += mapelW
   })
@@ -2257,7 +2257,7 @@ function generateLeger(outputPath, { sekolah: s, kelas, siswaList, mapelList, ni
 
   // Rows
   const ROW_H = 14
-  siswaList.forEach((sw: any, i: number) => {
+  siswaList.forEach((sw, i) => {
     if (y + ROW_H > ph - 30) {
       doc.addPage()
       y = mt + 10
@@ -2269,7 +2269,7 @@ function generateLeger(outputPath, { sekolah: s, kelas, siswaList, mapelList, ni
     doc.font(f.B).fontSize(7).text(sw.nama, startX + NO_W + 2, y + 4, { width: NAMA_W - 4 })
     let rx = startX + NO_W + NAMA_W
     let total = 0, cnt = 0
-    mapelList.forEach((m: any) => {
+    mapelList.forEach((m) => {
       const v = getNilaiAkhir(sw.id, m.id)
       if (v !== null) { total += v; cnt++ }
       const color = v === null ? '#999' : v >= 90 ? '#15803d' : v >= 75 ? '#1d4ed8' : v >= 60 ? '#b45309' : '#dc2626'
@@ -2287,8 +2287,8 @@ function generateLeger(outputPath, { sekolah: s, kelas, siswaList, mapelList, ni
   y += 8
   doc.font(f.B).fontSize(7).fillColor('#333').text('Keterangan Singkatan:', startX, y)
   y += 10
-  mapelList.forEach((m: any, i: number) => {
-    const abbr = m.singkatan || m.nama?.split(' ').map((w: string) => w[0]).join('') || m.nama?.slice(0, 4)
+  mapelList.forEach((m, i) => {
+    const abbr = m.singkatan || m.nama?.split(' ').map((w) => w[0]).join('') || m.nama?.slice(0, 4)
     const lx = startX + (i % 4) * (cw / 4)
     if (i % 4 === 0 && i > 0) y += 10
     doc.font(f.R).fontSize(7).fillColor('#555').text(`${abbr} = ${m.nama}`, lx, y, { width: cw / 4 - 5 })
@@ -2328,7 +2328,7 @@ function generateBukuIndukGuru(outputPath, { sekolah: s, guruList }) {
 
     const FW = cw - 80, LW = 95, VW = FW - LW - 12
 
-    const drawF = (label: string, value: string) => {
+    const drawF = (label, value) => {
       doc.font(f.R).fontSize(8).fillColor('#555').text(label, ml, y, { width: LW })
       doc.font(f.R).fontSize(8).fillColor('#000').text(':', ml + LW, y, { width: 8 })
       doc.font(f.B).fontSize(8).fillColor('#000').text(value || '—', ml + LW + 10, y, { width: VW })
@@ -2336,7 +2336,7 @@ function generateBukuIndukGuru(outputPath, { sekolah: s, guruList }) {
       y += 13
     }
 
-    const secTitle = (t: string) => {
+    const secTitle = (t) => {
       doc.font(f.B).fontSize(8.5).fillColor('#1e3a5f').text(t, ml, y, { width: FW })
       doc.moveTo(ml, y + 11).lineTo(ml + FW, y + 11).lineWidth(0.5).stroke('#1e3a5f')
       y += 16
@@ -2417,7 +2417,7 @@ function generateAbsensiGuru(outputPath, { sekolah: s, rekapList, bulan }) {
   COLS.forEach(c => { doc.font(f.B).fontSize(7.5).fillColor('#fff').text(c.h, hx + 1, y + 6, { width: c.w - 2, align: 'center' }); hx += c.w })
   y += 20
 
-  rekapList.forEach((g: any, i: number) => {
+  rekapList.forEach((g, i) => {
     const pct = g.total > 0 ? Math.round(((g.H + g.DL) / g.total) * 100) : 0
     const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
     doc.rect(sx, y, tableW, 16).fillAndStroke(bg, '#d1d5db')
@@ -2435,7 +2435,7 @@ function generateAbsensiGuru(outputPath, { sekolah: s, rekapList, bulan }) {
 
   // Summary
   y += 4
-  const total = rekapList.reduce((a: any, g: any) => ({ H: a.H + (g.H || 0), S: a.S + (g.S || 0), I: a.I + (g.I || 0), A: a.A + (g.A || 0), DL: a.DL + (g.DL || 0), total: a.total + (g.total || 0) }), { H: 0, S: 0, I: 0, A: 0, DL: 0, total: 0 })
+  const total = rekapList.reduce((a, g) => ({ H: a.H + (g.H || 0), S: a.S + (g.S || 0), I: a.I + (g.I || 0), A: a.A + (g.A || 0), DL: a.DL + (g.DL || 0), total: a.total + (g.total || 0) }), { H: 0, S: 0, I: 0, A: 0, DL: 0, total: 0 })
   doc.rect(sx, y, tableW, 18).fillAndStroke('#e8f0fe', '#1e3a5f')
   let tx = sx
   const totVals = ['', 'TOTAL', '', String(total.H), String(total.S), String(total.I), String(total.A), String(total.DL), String(total.total), '']
@@ -2471,7 +2471,7 @@ function generateJadwal(outputPath, { sekolah: s, kelas, jadwalList }) {
 
   const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu']
   const JAM_W = 38, HARI_W = Math.floor((cw - JAM_W) / HARI.length)
-  const MAX_JAM = Math.max(...jadwalList.map((j: any) => j.jam_ke), 10)
+  const MAX_JAM = Math.max(...jadwalList.map((j) => j.jam_ke), 10)
   const ROW_H = 36
 
   // Header
@@ -2487,7 +2487,7 @@ function generateJadwal(outputPath, { sekolah: s, kelas, jadwalList }) {
     doc.font(f.B).fontSize(10).fillColor('#374151').text(String(jam), ml, y + ROW_H / 2 - 6, { width: JAM_W, align: 'center' })
 
     HARI.forEach((hari, hi) => {
-      const j = jadwalList.find((x: any) => x.hari === hari && x.jam_ke === jam)
+      const j = jadwalList.find((x) => x.hari === hari && x.jam_ke === jam)
       const x = ml + JAM_W + hi * HARI_W
       const bg = j ? COLORS[hi % COLORS.length] : '#fff'
       doc.rect(x, y, HARI_W, ROW_H).fillAndStroke(bg, '#d1d5db')
@@ -2545,7 +2545,7 @@ function generateJurnal(outputPath, { sekolah: s, kelas, jurnalList, bulan }) {
   drawHeader()
 
   const ROW_H = 22
-  jurnalList.forEach((j: any, i: number) => {
+  jurnalList.forEach((j, i) => {
     if (y + ROW_H > ph - 40) { doc.addPage(); y = drawKopResmi(doc, s, ml, cw); drawHeader() }
     const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
     doc.rect(sx, y, tableW, ROW_H).fillAndStroke(bg, '#d1d5db')
@@ -2604,7 +2604,7 @@ function generateAbsensiSiswa(outputPath, { sekolah: s, kelas, rekapList, bulan 
   COLS.forEach(c => { doc.font(f.B).fontSize(7.5).fillColor('#fff').text(c.h, hx + 1, y + 6, { width: c.w - 2, align: 'center' }); hx += c.w })
   y += 20
 
-  rekapList.forEach((sw: any, i: number) => {
+  rekapList.forEach((sw, i) => {
     const pct = sw.total > 0 ? Math.round((sw.H / sw.total) * 100) : 0
     const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
     doc.rect(sx, y, tableW, 16).fillAndStroke(bg, '#d1d5db')
@@ -2641,7 +2641,7 @@ function generateSurat(outputPath, { sekolah: s, siswa, jenis, noSurat, keperlua
   doc.addPage()
   let y = drawKopResmi(doc, s, ml, cw)
 
-  const drawField = (label: string, value: string, lw = 120) => {
+  const drawField = (label, value, lw = 120) => {
     doc.font(f.R).fontSize(10).fillColor('#000')
       .text(label, ml + 20, y, { width: lw })
       .text(':', ml + 20 + lw, y, { width: 10 })
@@ -2649,7 +2649,7 @@ function generateSurat(outputPath, { sekolah: s, siswa, jenis, noSurat, keperlua
     y += 14
   }
 
-  const JUDUL: Record<string, string> = {
+  const JUDUL = {
     aktif: 'SURAT KETERANGAN MASIH AKTIF BELAJAR',
     mutasi: 'SURAT KETERANGAN PINDAH SEKOLAH',
     panggilan: 'SURAT PANGGILAN ORANG TUA / WALI MURID',
@@ -2674,7 +2674,7 @@ function generateSurat(outputPath, { sekolah: s, siswa, jenis, noSurat, keperlua
     else { doc.font(f.R).fontSize(7).fillColor('#aaa').text('Foto 3×4', inner + fotoBox, y + 45, { width: 80, align: 'center' }) }
     let fy = y + 12
     ;[['Nama', siswa.nama], ['NISN', siswa.nisn], ['NIS', siswa.nism], ['Kelas', siswa.kelas], ['Tgl Lahir', fmtTgl(siswa.tgl_lahir)]].forEach(([l, v]) => {
-      doc.font(f.R).fontSize(9).fillColor('#555').text(l as string, inner, fy, { width: 70 })
+      doc.font(f.R).fontSize(9).fillColor('#555').text(l, inner, fy, { width: 70 })
       doc.font(f.R).text(':', inner + 70, fy, { width: 8 })
       doc.font(f.B).fontSize(9).fillColor('#000').text(v || '—', inner + 80, fy, { width: fotoBox - 82 })
       fy += 13
