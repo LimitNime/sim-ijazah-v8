@@ -93,6 +93,42 @@ function initDB() {
       UNIQUE(angkatan_id, siswa_id)
     );
 
+    -- ── MODUL KEPEGAWAIAN ───────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS guru (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nip TEXT, nama TEXT NOT NULL, jk TEXT DEFAULT 'L',
+      tempat_lahir TEXT, tgl_lahir TEXT, agama TEXT DEFAULT 'Islam',
+      pendidikan TEXT, jurusan TEXT,
+      status_kepegawaian TEXT DEFAULT 'PNS',
+      sk_pertama TEXT, tmt_pertama TEXT,
+      golongan TEXT, jabatan TEXT DEFAULT 'Guru',
+      mapel TEXT, no_hp TEXT, alamat TEXT, email TEXT, foto TEXT,
+      tahun_masuk TEXT, keterangan TEXT
+    );
+    CREATE TABLE IF NOT EXISTS absensi_guru (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guru_id INTEGER NOT NULL, tanggal TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'H', keterangan TEXT,
+      UNIQUE(guru_id, tanggal)
+    );
+    CREATE TABLE IF NOT EXISTS jam_mengajar (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guru_id INTEGER NOT NULL, mapel TEXT, kelas TEXT,
+      jumlah_jam INTEGER DEFAULT 0, tahun_ajaran TEXT
+    );
+    CREATE TABLE IF NOT EXISTS sk_tugas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guru_id INTEGER NOT NULL, jenis_tugas TEXT,
+      kelas TEXT, no_sk TEXT, tgl_sk TEXT,
+      tahun_ajaran TEXT, keterangan TEXT
+    );
+    CREATE TABLE IF NOT EXISTS surat_keluar (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      jenis TEXT, siswa_id INTEGER, no_surat TEXT,
+      perihal TEXT, tanggal TEXT, keterangan TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
     -- ── MODUL WALI KELAS ────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS kelas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -751,6 +787,140 @@ function registerIPC() {
     tx()
     return { ok: true }
   })
+  // ── BUKU KLEPER ──────────────────────────────────────────────────────────
+  ipcMain.handle('kleper:list', (_, q) => {
+    let sql = 'SELECT * FROM siswa'
+    const params = []
+    if (q) { sql += ' WHERE nama LIKE ? OR nisn LIKE ? OR nism LIKE ?'; params.push(`%${q}%`,`%${q}%`,`%${q}%`) }
+    sql += ' ORDER BY nama'
+    return db.prepare(sql).all(...params)
+  })
+  ipcMain.handle('kleper:by_huruf', (_, huruf) => {
+    return db.prepare("SELECT * FROM siswa WHERE UPPER(SUBSTR(nama,1,1))=? ORDER BY nama").all(huruf.toUpperCase())
+  })
+
+  // ── GURU ─────────────────────────────────────────────────────────────────
+  ipcMain.handle('guru:list', (_, q) => {
+    let sql = 'SELECT * FROM guru'
+    const params = []
+    if (q) { sql += ' WHERE nama LIKE ? OR nip LIKE ?'; params.push(`%${q}%`,`%${q}%`) }
+    sql += ' ORDER BY nama'
+    return db.prepare(sql).all(...params)
+  })
+  ipcMain.handle('guru:get', (_, id) => db.prepare('SELECT * FROM guru WHERE id=?').get(id))
+  ipcMain.handle('guru:add', (_, d) => {
+    const r = db.prepare(`INSERT INTO guru(nip,nama,jk,tempat_lahir,tgl_lahir,agama,pendidikan,jurusan,status_kepegawaian,sk_pertama,tmt_pertama,golongan,jabatan,mapel,no_hp,alamat,email,foto,tahun_masuk,keterangan) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(d.nip||'',d.nama||'',d.jk||'',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.pendidikan||'',d.jurusan||'',d.status_kepegawaian||'PNS',d.sk_pertama||'',d.tmt_pertama||'',d.golongan||'',d.jabatan||'Guru',d.mapel||'',d.no_hp||'',d.alamat||'',d.email||'',d.foto||'',d.tahun_masuk||'',d.keterangan||'')
+    return { ok: true, id: r.lastInsertRowid }
+  })
+  ipcMain.handle('guru:update', (_, id, d) => {
+    db.prepare(`UPDATE guru SET nip=?,nama=?,jk=?,tempat_lahir=?,tgl_lahir=?,agama=?,pendidikan=?,jurusan=?,status_kepegawaian=?,sk_pertama=?,tmt_pertama=?,golongan=?,jabatan=?,mapel=?,no_hp=?,alamat=?,email=?,tahun_masuk=?,keterangan=? WHERE id=?`).run(d.nip||'',d.nama||'',d.jk||'',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.pendidikan||'',d.jurusan||'',d.status_kepegawaian||'PNS',d.sk_pertama||'',d.tmt_pertama||'',d.golongan||'',d.jabatan||'Guru',d.mapel||'',d.no_hp||'',d.alamat||'',d.email||'',d.tahun_masuk||'',d.keterangan||'',id)
+    return { ok: true }
+  })
+  ipcMain.handle('guru:delete', (_, id) => { db.prepare('DELETE FROM guru WHERE id=?').run(id); return { ok: true } })
+  ipcMain.handle('guru:upload_foto', async (_, id) => {
+    const result = await dialog.showOpenDialog({ title:'Pilih Foto Guru', filters:[{name:'Gambar',extensions:['jpg','jpeg','png']}], properties:['openFile'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    const src = result.filePaths[0]; const ext = path.extname(src)
+    const dest = path.join(outputPath,'..','data','foto_guru',`guru_${id}${ext}`)
+    const fs = require('fs'); fs.mkdirSync(path.dirname(dest),{recursive:true}); fs.copyFileSync(src,dest)
+    db.prepare('UPDATE guru SET foto=? WHERE id=?').run(dest,id)
+    return dest
+  })
+
+  // ── ABSENSI GURU ──────────────────────────────────────────────────────────
+  ipcMain.handle('absensi_guru:get', (_, tanggal) => {
+    const all = db.prepare('SELECT * FROM guru ORDER BY nama').all()
+    return all.map(g => {
+      const abs = db.prepare('SELECT * FROM absensi_guru WHERE guru_id=? AND tanggal=?').get(g.id, tanggal)
+      return { ...g, status: abs?.status||'H', keterangan: abs?.keterangan||'' }
+    })
+  })
+  ipcMain.handle('absensi_guru:save', (_, tanggal, rows) => {
+    const upsert = db.prepare('INSERT INTO absensi_guru(guru_id,tanggal,status,keterangan) VALUES(?,?,?,?) ON CONFLICT(guru_id,tanggal) DO UPDATE SET status=excluded.status,keterangan=excluded.keterangan')
+    db.transaction(()=>{ for(const r of rows) upsert.run(r.guru_id,tanggal,r.status,r.keterangan||'') })()
+    return { ok: true }
+  })
+  ipcMain.handle('absensi_guru:rekap', (_, bulan) => {
+    const all = db.prepare('SELECT * FROM guru ORDER BY nama').all()
+    return all.map(g => {
+      let q = "SELECT status,COUNT(*) jml FROM absensi_guru WHERE guru_id=?"
+      const params = [g.id]
+      if (bulan) { q += " AND strftime('%Y-%m',tanggal)=?"; params.push(bulan) }
+      q += " GROUP BY status"
+      const rows = db.prepare(q).all(...params)
+      const r = {H:0,S:0,I:0,A:0,DL:0}
+      for(const row of rows) r[row.status]=(r[row.status]||0)+row.jml
+      return { ...g, ...r, total: r.H+r.S+r.I+r.A+r.DL }
+    })
+  })
+
+  // ── JAM MENGAJAR ──────────────────────────────────────────────────────────
+  ipcMain.handle('jam_mengajar:list', (_, tahun_ajaran) => {
+    if (tahun_ajaran) return db.prepare('SELECT j.*,g.nama as nama_guru FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id WHERE j.tahun_ajaran=? ORDER BY g.nama').all(tahun_ajaran)
+    return db.prepare('SELECT j.*,g.nama as nama_guru FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id ORDER BY g.nama').all()
+  })
+  ipcMain.handle('jam_mengajar:save', (_, d) => {
+    if (d.id) {
+      db.prepare('UPDATE jam_mengajar SET guru_id=?,mapel=?,kelas=?,jumlah_jam=?,tahun_ajaran=? WHERE id=?').run(d.guru_id,d.mapel||'',d.kelas||'',d.jumlah_jam||0,d.tahun_ajaran||'',d.id)
+    } else {
+      db.prepare('INSERT INTO jam_mengajar(guru_id,mapel,kelas,jumlah_jam,tahun_ajaran) VALUES(?,?,?,?,?)').run(d.guru_id,d.mapel||'',d.kelas||'',d.jumlah_jam||0,d.tahun_ajaran||'')
+    }
+    return { ok: true }
+  })
+  ipcMain.handle('jam_mengajar:delete', (_, id) => { db.prepare('DELETE FROM jam_mengajar WHERE id=?').run(id); return { ok: true } })
+
+  // ── SK TUGAS TAMBAHAN ────────────────────────────────────────────────────
+  ipcMain.handle('sk_tugas:list', () => db.prepare('SELECT s.*,g.nama as nama_guru FROM sk_tugas s LEFT JOIN guru g ON g.id=s.guru_id ORDER BY s.tahun_ajaran DESC,g.nama').all())
+  ipcMain.handle('sk_tugas:save', (_, d) => {
+    if (d.id) {
+      db.prepare('UPDATE sk_tugas SET guru_id=?,jenis_tugas=?,kelas=?,no_sk=?,tgl_sk=?,tahun_ajaran=?,keterangan=? WHERE id=?').run(d.guru_id,d.jenis_tugas||'',d.kelas||'',d.no_sk||'',d.tgl_sk||'',d.tahun_ajaran||'',d.keterangan||'',d.id)
+    } else {
+      db.prepare('INSERT INTO sk_tugas(guru_id,jenis_tugas,kelas,no_sk,tgl_sk,tahun_ajaran,keterangan) VALUES(?,?,?,?,?,?,?)').run(d.guru_id,d.jenis_tugas||'',d.kelas||'',d.no_sk||'',d.tgl_sk||'',d.tahun_ajaran||'',d.keterangan||'')
+    }
+    return { ok: true }
+  })
+  ipcMain.handle('sk_tugas:delete', (_, id) => { db.prepare('DELETE FROM sk_tugas WHERE id=?').run(id); return { ok: true } })
+
+  // ── LEGER NILAI KELAS ────────────────────────────────────────────────────
+  ipcMain.handle('leger:get', (_, kelas_id) => {
+    const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+    if (!k) return { siswa:[], mapel:[], nilai:{} }
+    let siswas = []
+    if (k.angkatan_id) {
+      siswas = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(k.angkatan_id)
+    } else {
+      siswas = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    const mapels = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999)').all()
+    const sems = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+    const allNilai = db.prepare('SELECT * FROM nilai').all()
+    const nilaiMap = {}
+    for (const n of allNilai) {
+      const key = `${n.siswa_id}_${n.mapel_id}_${n.semester_id}`
+      nilaiMap[key] = n
+    }
+    const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+    const br = sekolah?.bobot_raport ?? 60, bu = sekolah?.bobot_ujian ?? 40, totalB = br+bu
+    const ujianSem = sems.find(s=>s.is_ujian) || sems[sems.length-1]
+    const raportSems = sems.filter(s=>!s.is_ujian)
+    return { siswa:siswas, mapel:mapels, sems, nilaiMap, ujianSem, raportSems, br, bu, totalB, kelas:k }
+  })
+
+  // ── SURAT-SURAT ───────────────────────────────────────────────────────────
+  ipcMain.handle('surat:get_siswa', (_, siswa_id) => {
+    const s = db.prepare('SELECT * FROM siswa WHERE id=?').get(siswa_id)
+    const sk = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+    const ang = db.prepare('SELECT a.* FROM angkatan_siswa asa JOIN angkatan a ON a.id=asa.angkatan_id WHERE asa.siswa_id=? LIMIT 1').get(siswa_id)
+    return { siswa:s, sekolah:sk, angkatan:ang }
+  })
+  ipcMain.handle('surat:list', () => {
+    return db.prepare('SELECT su.*,s.nama as nama_siswa FROM surat_keluar su LEFT JOIN siswa s ON s.id=su.siswa_id ORDER BY su.created_at DESC').all()
+  })
+  ipcMain.handle('surat:save_log', (_, d) => {
+    db.prepare('INSERT INTO surat_keluar(jenis,siswa_id,no_surat,perihal,tanggal,keterangan) VALUES(?,?,?,?,?,?)').run(d.jenis||'',d.siswa_id||null,d.no_surat||'',d.perihal||'',d.tanggal||'',d.keterangan||'')
+    return { ok: true }
+  })
+
   ipcMain.handle('absensi:rekap', (_, kelas_id, bulan) => {
     const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
     if (!k) return []
@@ -777,7 +947,7 @@ function registerIPC() {
   ipcMain.handle('angkatan:hapus_siswa', (_, id, ids) => { const del=db.prepare('DELETE FROM angkatan_siswa WHERE angkatan_id=? AND siswa_id=?'); const tx=db.transaction(list=>list.forEach(sid=>del.run(id,sid))); tx(ids); return true })
 
   // ── PDF Handlers ──────────────────────────────────────────────────────
-  const { generateSKL, generateDKN, generateNilaiIjazah, generateIjazah, generateTranskrip, generateSKKelulusan, generateSKKB } = require('./pdf-generator')
+  const { generateSKL, generateDKN, generateNilaiIjazah, generateIjazah, generateTranskrip, generateSKKelulusan, generateSKKB, generateBukuKleper, generateBukuInduk, generateLeger, generateBukuIndukGuru, generateAbsensiGuru, generateJadwal, generateJurnal, generateAbsensiSiswa, generateSurat } = require('./pdf-generator')
 
   function getPDFData(angkatan_id) {
     const sekolah  = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
@@ -1300,6 +1470,164 @@ function registerIPC() {
     return data
   }
   ipcMain.handle('pdf:skl_siswa',         async (_, id) => { try { const data=getPDFDataSiswa(id); const f=generateSKL(outputPath,data); await shell.openPath(f); return {ok:true} } catch(e){return{ok:false,error:e.message}} })
+
+  // ── PDF: BUKU KLEPER ──────────────────────────────────────────────────────
+  ipcMain.handle('pdf:buku_kleper', async () => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const siswaList = db.prepare('SELECT * FROM siswa ORDER BY nama').all()
+      const fn = generateBukuKleper(outputPath, { sekolah, siswaList })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: BUKU INDUK SISWA ────────────────────────────────────────────────
+  ipcMain.handle('pdf:buku_induk_siswa', async (_, angkatan_id) => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      let siswaList
+      if (angkatan_id) {
+        siswaList = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(angkatan_id)
+      } else {
+        siswaList = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const fn = generateBukuInduk(outputPath, { sekolah, siswaList })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: LEGER NILAI ──────────────────────────────────────────────────────
+  ipcMain.handle('pdf:leger', async (_, kelas_id) => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const kelas = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+      if (!kelas) return { ok: false, error: 'Kelas tidak ditemukan' }
+      let siswaList
+      if (kelas.angkatan_id) {
+        siswaList = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(kelas.angkatan_id)
+      } else {
+        siswaList = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const mapelList = db.prepare('SELECT * FROM mapel ORDER BY COALESCE(urutan,999),nama').all()
+      const sems = db.prepare('SELECT * FROM semester_config ORDER BY urutan').all()
+      const ujianSem = sems.find(s => s.is_ujian) || sems[sems.length-1]
+      const raportSems = sems.filter(s => !s.is_ujian)
+      const allNilai = db.prepare('SELECT * FROM nilai').all()
+      const nilaiMap = {}
+      for (const n of allNilai) { nilaiMap[`${n.siswa_id}_${n.mapel_id}_${n.semester_id}`] = n }
+      const br = sekolah?.bobot_raport ?? 60, bu = sekolah?.bobot_ujian ?? 40, totalB = br + bu
+      const fn = generateLeger(outputPath, { sekolah, kelas, siswaList, mapelList, nilaiMap, ujianSem, raportSems, br, bu, totalB })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: BUKU INDUK GURU ──────────────────────────────────────────────────
+  ipcMain.handle('pdf:buku_induk_guru', async () => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const guruList = db.prepare('SELECT * FROM guru ORDER BY nama').all()
+      const fn = generateBukuIndukGuru(outputPath, { sekolah, guruList })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: ABSENSI GURU ─────────────────────────────────────────────────────
+  ipcMain.handle('pdf:absensi_guru', async (_, bulan) => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const all = db.prepare('SELECT * FROM guru ORDER BY nama').all()
+      const rekapList = all.map(g => {
+        let q = "SELECT status,COUNT(*) jml FROM absensi_guru WHERE guru_id=?"
+        const params = [g.id]
+        if (bulan) { q += " AND strftime('%Y-%m',tanggal)=?"; params.push(bulan) }
+        q += " GROUP BY status"
+        const rows = db.prepare(q).all(...params)
+        const r = {H:0,S:0,I:0,A:0,DL:0}
+        for(const row of rows) r[row.status]=(r[row.status]||0)+row.jml
+        return { ...g, ...r, total: r.H+r.S+r.I+r.A+r.DL }
+      })
+      const fn = generateAbsensiGuru(outputPath, { sekolah, rekapList, bulan })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: JADWAL PELAJARAN ─────────────────────────────────────────────────
+  ipcMain.handle('pdf:jadwal', async (_, kelas_id) => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const kelas = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+      if (!kelas) return { ok: false, error: 'Kelas tidak ditemukan' }
+      const jadwalList = db.prepare("SELECT * FROM jadwal_pelajaran WHERE kelas_id=? ORDER BY CASE hari WHEN 'Senin' THEN 1 WHEN 'Selasa' THEN 2 WHEN 'Rabu' THEN 3 WHEN 'Kamis' THEN 4 WHEN 'Jumat' THEN 5 WHEN 'Sabtu' THEN 6 ELSE 7 END, jam_ke").all(kelas_id)
+      const fn = generateJadwal(outputPath, { sekolah, kelas, jadwalList })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: JURNAL KELAS ─────────────────────────────────────────────────────
+  ipcMain.handle('pdf:jurnal', async (_, kelas_id, bulan) => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const kelas = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+      if (!kelas) return { ok: false, error: 'Kelas tidak ditemukan' }
+      let q = 'SELECT * FROM jurnal_kelas WHERE kelas_id=?'
+      const params = [kelas_id]
+      if (bulan) { q += " AND strftime('%Y-%m',tanggal)=?"; params.push(bulan) }
+      q += ' ORDER BY tanggal,jam_ke'
+      const jurnalList = db.prepare(q).all(...params)
+      const fn = generateJurnal(outputPath, { sekolah, kelas, jurnalList, bulan })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: ABSENSI SISWA ────────────────────────────────────────────────────
+  ipcMain.handle('pdf:absensi_siswa', async (_, kelas_id, bulan) => {
+    try {
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const kelas = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+      if (!kelas) return { ok: false, error: 'Kelas tidak ditemukan' }
+      let sw
+      if (kelas.angkatan_id) {
+        sw = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(kelas.angkatan_id)
+      } else {
+        sw = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const rekapList = sw.map(s => {
+        let q = "SELECT status,COUNT(*) jml FROM absensi_harian WHERE kelas_id=? AND siswa_id=?"
+        const params = [kelas_id, s.id]
+        if (bulan) { q += " AND strftime('%Y-%m',tanggal)=?"; params.push(bulan) }
+        q += " GROUP BY status"
+        const rows = db.prepare(q).all(...params)
+        const r = {H:0,S:0,I:0,A:0}
+        for(const row of rows) r[row.status]=(r[row.status]||0)+row.jml
+        return { ...s, ...r, total: r.H+r.S+r.I+r.A }
+      })
+      const fn = generateAbsensiSiswa(outputPath, { sekolah, kelas, rekapList, bulan })
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
+
+  // ── PDF: SURAT ────────────────────────────────────────────────────────────
+  ipcMain.handle('pdf:surat', async (_, params) => {
+    try {
+      const { siswa_id, jenis, noSurat, keperluan } = params
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const siswa = db.prepare('SELECT * FROM siswa WHERE id=?').get(siswa_id)
+      const angkatan = db.prepare('SELECT a.* FROM angkatan_siswa asa JOIN angkatan a ON a.id=asa.angkatan_id WHERE asa.siswa_id=? LIMIT 1').get(siswa_id)
+      const fn = generateSurat(outputPath, { sekolah, siswa, jenis, noSurat, keperluan, angkatan })
+      // Log surat
+      db.prepare('INSERT INTO surat_keluar(jenis,siswa_id,no_surat,perihal,tanggal,keterangan) VALUES(?,?,?,?,?,?)').run(jenis, siswa_id, noSurat || '', jenis, new Date().toISOString().slice(0,10), keperluan || '')
+      await shell.openPath(fn)
+      return { ok: true, path: fn }
+    } catch(e) { return { ok: false, error: e.message } }
+  })
   ipcMain.handle('pdf:transkrip_siswa',   async (_, id) => { try { const data=getPDFDataSiswa(id); const f=generateTranskrip(outputPath,data); await shell.openPath(f); return {ok:true} } catch(e){return{ok:false,error:e.message}} })
   ipcMain.handle('pdf:nilai_ijazah_siswa',async (_, id) => { try { const data=getPDFDataSiswa(id); const f=generateNilaiIjazah(outputPath,data); await shell.openPath(f); return {ok:true} } catch(e){return{ok:false,error:e.message}} })
   ipcMain.handle('pdf:ijazah_siswa',      async (_, id) => { try { const data=getPDFDataSiswa(id); const f=generateIjazah(outputPath,data); await shell.openPath(f); return {ok:true} } catch(e){return{ok:false,error:e.message}} })
