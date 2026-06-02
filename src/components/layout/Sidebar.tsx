@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import {
   LayoutDashboard, School, Users, BookOpen, Settings,
   PenLine, Printer, GraduationCap, LogOut, ChevronRight,
-  BarChart2, Upload, FileSpreadsheet, Hash, Trophy, ClipboardList
+  BarChart2, Upload, FileSpreadsheet, Hash, Trophy, ClipboardList,
+  BookOpen, BookMarked, TableProperties, Mail, Briefcase
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '../../hooks/useAuth'
@@ -11,6 +12,7 @@ export type PageKey =
   | 'dashboard' | 'sekolah' | 'siswa' | 'mapel'
   | 'semester' | 'nilai' | 'rekap-nilai' | 'import-nilai'
   | 'rekap-cetak' | 'angkatan' | 'penomoran-surat' | 'ranking' | 'wali-kelas'
+  | 'buku-kleper' | 'buku-induk' | 'leger-nilai' | 'surat' | 'kepegawaian'
 
 interface NavItem {
   key: PageKey
@@ -30,6 +32,11 @@ const NAV: NavItem[] = [
   { key: 'rekap-nilai', label: 'Rekap Nilai',         icon: <BarChart2 className="w-4 h-4" /> },
   { key: 'ranking',     label: 'Ranking Siswa',       icon: <Trophy className="w-4 h-4" /> },
   { key: 'wali-kelas',  label: 'Wali Kelas',           icon: <ClipboardList className="w-4 h-4" />, group: 'WALI KELAS' },
+  { key: 'buku-kleper', label: 'Buku Kleper',          icon: <BookOpen className="w-4 h-4" /> },
+  { key: 'buku-induk',  label: 'Buku Induk Siswa',     icon: <BookMarked className="w-4 h-4" /> },
+  { key: 'leger-nilai', label: 'Leger Nilai Kelas',    icon: <TableProperties className="w-4 h-4" /> },
+  { key: 'surat',       label: 'Surat-Surat',          icon: <Mail className="w-4 h-4" /> },
+  { key: 'kepegawaian', label: 'Kepegawaian',          icon: <Briefcase className="w-4 h-4" />, group: 'KEPEGAWAIAN' },
   { key: 'import-nilai',    label: 'Import Nilai',        icon: <Upload className="w-4 h-4" /> },
   { key: 'penomoran-surat', label: 'Penomoran Surat',     icon: <Hash className="w-4 h-4" /> },
   { key: 'rekap-cetak', label: 'Rekap & Cetak PDF',  icon: <Printer className="w-4 h-4" /> },
