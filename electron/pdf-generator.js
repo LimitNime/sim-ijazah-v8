@@ -1940,6 +1940,8 @@ module.exports = {
   generateJurnal,
   generateAbsensiSiswa,
   generateSurat,
+  generateKartuUjian,
+  generateRekapBOS,
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -2753,6 +2755,298 @@ function generateSurat(outputPath, { sekolah: s, siswa, jenis, noSurat, keperlua
     doc.font(f.B).text(s.kepala_sekolah || '____________________', ttdX, y + 65, { width: 180, align: 'center' })
     doc.font(f.R).text(`NIP. ${s.nip_kepsek || '____________________'}`, ttdX, y + 77, { width: 180, align: 'center' })
   }
+
+  doc.end()
+  return fn
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  KARTU PESERTA UJIAN — 4 kartu per halaman A4 portrait
+//  Format: logo kiri, judul tengah, data siswa, TTD kepsek kiri bawah
+// ══════════════════════════════════════════════════════════════════════════
+function generateKartuUjian(outputPath, { sekolah: s, cfg, siswaList }) {
+  const PDFDocument = require('pdfkit')
+  const fs          = require('fs')
+  const path        = require('path')
+
+  // A4 portrait
+  const PW = 595.28, PH = 841.89
+  const PAGE_ML = 20, PAGE_MR = 20, PAGE_MT = 20, PAGE_MB = 20
+
+  const doc = new PDFDocument({ size: [PW, PH], margins: { top: PAGE_MT, bottom: PAGE_MB, left: PAGE_ML, right: PAGE_MR }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `kartu_ujian_${cfg.nama_ujian.replace(/\s/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+
+  const f = fontSetup(doc, s)
+
+  // Card area
+  const CARD_W  = (PW - PAGE_ML - PAGE_MR - 10) / 2   // 2 kolom, gap 10
+  const CARD_H  = (PH - PAGE_MT - PAGE_MB - 10) / 2   // 2 baris, gap 10
+  const GAP_X   = 10
+  const GAP_Y   = 10
+
+  // Grid positions: [col, row] -> [x, y]
+  const cardPos = [
+    [PAGE_ML,                          PAGE_MT],
+    [PAGE_ML + CARD_W + GAP_X,         PAGE_MT],
+    [PAGE_ML,                          PAGE_MT + CARD_H + GAP_Y],
+    [PAGE_ML + CARD_W + GAP_X,         PAGE_MT + CARD_H + GAP_Y],
+  ]
+
+  const drawCard = (cx, cy, siswa, noIdx) => {
+    // Border luar kartu
+    doc.rect(cx, cy, CARD_W, CARD_H).lineWidth(1).stroke('#333')
+
+    const PAD = 8
+    const innerX = cx + PAD
+    const innerW = CARD_W - PAD * 2
+    let y = cy + PAD
+
+    // ── KOP IMAGE (logo sekolah sebagai kop) ──────────────────────────────
+    const LOGO_SZ = 48
+    if (s.logo_sekolah) {
+      try {
+        doc.image(s.logo_sekolah, innerX, y, { fit: [LOGO_SZ, LOGO_SZ] })
+      } catch {}
+    }
+
+    // Judul di sebelah kanan logo
+    const titleX = innerX + LOGO_SZ + 6
+    const titleW = innerW - LOGO_SZ - 6
+    let ty = y + 2
+    doc.font(f.B).fontSize(7).fillColor('#000')
+      .text('KARTU PESERTA', titleX, ty, { width: titleW, align: 'center' })
+    ty += 9
+    doc.font(f.B).fontSize(8.5).fillColor('#000')
+      .text(cfg.nama_ujian.toUpperCase(), titleX, ty, { width: titleW, align: 'center' })
+    ty += 11
+    // Nama sekolah
+    const namaSekolah = (s.nama || '').toUpperCase()
+    doc.font(f.B).fontSize(7.5)
+      .text(namaSekolah, titleX, ty, { width: titleW, align: 'center' })
+    ty += 10
+    // Tahun ajaran
+    doc.font(f.R).fontSize(7)
+      .text(`TAHUN PELAJARAN ${cfg.tahun_ajaran || s.tahun_ajaran || ''}`, titleX, ty, { width: titleW, align: 'center' })
+
+    // Garis pemisah kop
+    const kopBottom = cy + LOGO_SZ + PAD + 6
+    y = Math.max(kopBottom, ty + 12)
+    doc.moveTo(cx, y).lineTo(cx + CARD_W, y).lineWidth(1.5).stroke('#000')
+    doc.moveTo(cx, y + 3).lineTo(cx + CARD_W, y + 3).lineWidth(0.4).stroke('#000')
+    y += 8
+
+    // ── DATA SISWA ────────────────────────────────────────────────────────
+    const LW = 55  // label width
+    const FS  = 8.5
+    const ROW_GAP = 12
+
+    const drawRow = (label, value) => {
+      doc.font(f.R).fontSize(FS - 1).fillColor('#444').text(label, innerX, y, { width: LW })
+      doc.font(f.R).fontSize(FS - 1).fillColor('#000').text(':', innerX + LW, y, { width: 8 })
+      doc.font(f.B).fontSize(FS).fillColor('#000').text(value || '—', innerX + LW + 8, y, { width: innerW - LW - 8 })
+      // Garis bawah field
+      doc.moveTo(innerX + LW + 8, y + FS + 1).lineTo(cx + CARD_W - PAD, y + FS + 1).lineWidth(0.3).stroke('#ccc')
+      y += ROW_GAP
+    }
+
+    drawRow('Nama', siswa.nama)
+    drawRow('No. Peserta', siswa.no_peserta || `${noIdx}`)
+    drawRow('Kelas', siswa.kelas || siswa.kelas_ujian || (cfg.nama_angkatan ? `IX (${['Satu','Dua','Tiga','Empat','Lima','Enam','Tujuh','Delapan','Sembilan'][noIdx-1]||noIdx})` : '—'))
+    drawRow('Ruang', siswa.ruang || cfg.ruang_default || ':')
+
+    y += 4
+    // Garis ruang kosong untuk isi manual
+    doc.moveTo(innerX, y).lineTo(cx + CARD_W - PAD, y).lineWidth(0.5).stroke('#999')
+    y += 10
+
+    // ── TTD KEPSEK ────────────────────────────────────────────────────────
+    const TTD_W = (innerW - 10) / 2
+    const ttdX  = innerX                    // kiri
+    const infoX = innerX + TTD_W + 10       // kanan: kota + ttd info
+
+    // Kiri: tanda tangan gambar
+    doc.font(f.R).fontSize(6.5).fillColor('#555')
+      .text(`${s.kota || '___________'}, ${fmtBulanThn()}`, ttdX, y, { width: TTD_W, align: 'center' })
+    y += 8
+    doc.font(f.R).fontSize(6.5).fillColor('#555')
+      .text('Kepala Sekolah,', ttdX, y, { width: TTD_W, align: 'center' })
+    y += 4
+
+    const TTD_IMG_H = 28
+    if (s.ttd_kepsek) {
+      try {
+        doc.image(s.ttd_kepsek, ttdX + (TTD_W - 50) / 2, y, { fit: [50, TTD_IMG_H] })
+      } catch {}
+    } else if (s.kop_image) {
+      // Fallback: kosong dengan garis
+      doc.rect(ttdX + (TTD_W - 50) / 2, y, 50, TTD_IMG_H).stroke('#ddd')
+    }
+    y += TTD_IMG_H
+
+    doc.font(f.B).fontSize(7).fillColor('#000')
+      .text(s.kepala || '____________________', ttdX, y, { width: TTD_W, align: 'center' })
+    y += 8
+    doc.font(f.R).fontSize(6).fillColor('#555')
+      .text(`NIP. ${s.nip || '____________________'}`, ttdX, y, { width: TTD_W, align: 'center' })
+
+    // Kanan bawah: pesan
+    const msgY = cy + CARD_H - PAD - 18
+    doc.font(f.I).fontSize(6).fillColor('#777')
+      .text('Selama Ujian Kartu Ini Harap Dibawa', infoX, msgY, { width: TTD_W, align: 'center' })
+  }
+
+  // ── Halaman ───────────────────────────────────────────────────────────────
+  const CARDS_PER_PAGE = 4
+  for (let i = 0; i < siswaList.length; i++) {
+    const posIdx = i % CARDS_PER_PAGE
+    if (posIdx === 0) doc.addPage()
+    const [cx, cy] = cardPos[posIdx]
+    drawCard(cx, cy, siswaList[i], i + 1)
+  }
+
+  // Padding kartu terakhir jika tidak genap 4
+  if (siswaList.length % CARDS_PER_PAGE !== 0) {
+    const remaining = CARDS_PER_PAGE - (siswaList.length % CARDS_PER_PAGE)
+    const startIdx  = siswaList.length % CARDS_PER_PAGE
+    for (let i = 0; i < remaining; i++) {
+      const [cx, cy] = cardPos[startIdx + i]
+      doc.rect(cx, cy, CARD_W, CARD_H).lineWidth(0.5).dash(4, { space: 3 }).stroke('#ddd')
+      doc.undash()
+    }
+  }
+
+  doc.end()
+  return fn
+}
+
+// Helper bulan tahun untuk TTD
+function fmtBulanThn() {
+  const d   = new Date()
+  const bln = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+  return `${bln[d.getMonth()]} ${d.getFullYear()}`
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  REKAP BOS — PDF landscape
+// ══════════════════════════════════════════════════════════════════════════
+function generateRekapBOS(outputPath, { sekolah: s, items, tahun, semester, jumlah_siswa }) {
+  const PDFDocument = require('pdfkit')
+  const fs          = require('fs')
+  const path        = require('path')
+  const A4land      = getPaperSize(s, true)
+  const [pw, ph]    = A4land
+  const ml = 30, mr = 30, cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: A4land, margins: { top: 18, bottom: 25, left: ml, right: mr }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `rekap_bos_${tahun || 'all'}_${(semester||'').replace(/\s/g,'')}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f   = fontSetup(doc, s)
+
+  const fmtRp = n => n != null ? 'Rp ' + Math.round(n).toLocaleString('id-ID') : '—'
+  const bln   = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
+  const tglNow = `${new Date().getDate()} ${bln[new Date().getMonth()]} ${new Date().getFullYear()}`
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  doc.font(f.B).fontSize(12).fillColor('#000').text('LAPORAN PENGGUNAAN DANA BOS', ml, y, { width: cw, align: 'center' })
+  y += 14
+  doc.font(f.R).fontSize(9).text(`Semester: ${semester || '—'}  |  Tahun: ${tahun || '—'}  |  Jumlah Siswa: ${jumlah_siswa}  |  ${s.nama || ''}`, ml, y, { width: cw, align: 'center' })
+  y += 18
+
+  const COLS = [
+    { h: 'No',          w: 24,  align: 'center' },
+    { h: 'Komponen',    w: 170, align: 'left'   },
+    { h: 'Sub Komponen',w: 160, align: 'left'   },
+    { h: 'Anggaran',    w: 100, align: 'right'  },
+    { h: 'Realisasi',   w: 100, align: 'right'  },
+    { h: 'Sisa',        w: 90,  align: 'right'  },
+    { h: 'Serapan',     w: 55,  align: 'center' },
+  ]
+  const tableW = COLS.reduce((a, c) => a + c.w, 0)
+  const sx     = ml + (cw - tableW) / 2
+
+  // Header
+  doc.rect(sx, y, tableW, 20).fillAndStroke('#1e3a5f', '#1e3a5f')
+  let hx = sx
+  COLS.forEach(c => {
+    doc.font(f.B).fontSize(7.5).fillColor('#fff').text(c.h, hx + 2, y + 6, { width: c.w - 4, align: c.align })
+    hx += c.w
+  })
+  y += 20
+
+  // Group items by komponen
+  const grouped = {}
+  for (const item of items) {
+    if (!grouped[item.komponen]) grouped[item.komponen] = []
+    grouped[item.komponen].push(item)
+  }
+
+  let grandAng = 0, grandReal = 0
+  let kompNo = 0
+  const ROW_H = 15
+
+  for (const komp of Object.keys(grouped)) {
+    kompNo++
+    const rows = grouped[komp]
+    const kompAng  = rows.reduce((a, r) => a + (r.anggaran  || 0), 0)
+    const kompReal = rows.reduce((a, r) => a + (r.realisasi || 0), 0)
+    grandAng  += kompAng
+    grandReal += kompReal
+
+    // Komponen header row
+    if (y + ROW_H > ph - 30) { doc.addPage(); y = 30 }
+    doc.rect(sx, y, tableW, ROW_H).fillAndStroke('#dbeafe', '#d1d5db')
+    let rx = sx
+    const kompVals = [String(kompNo), komp, '', fmtRp(kompAng), fmtRp(kompReal), fmtRp(kompAng - kompReal), kompAng > 0 ? `${Math.round((kompReal/kompAng)*100)}%` : '—']
+    kompVals.forEach((v, ci) => {
+      doc.font(f.B).fontSize(7.5).fillColor('#1e3a5f').text(v, rx + 2, y + 4, { width: COLS[ci].w - 4, align: COLS[ci].align, ellipsis: true })
+      rx += COLS[ci].w
+    })
+    y += ROW_H
+
+    // Sub rows
+    rows.forEach((item, si) => {
+      if (y + ROW_H > ph - 30) { doc.addPage(); y = 30 }
+      const bg = si % 2 === 0 ? '#f9fafb' : '#fff'
+      doc.rect(sx, y, tableW, ROW_H).fillAndStroke(bg, '#d1d5db')
+      const sisa = (item.anggaran || 0) - (item.realisasi || 0)
+      const pct  = item.anggaran > 0 ? Math.round((item.realisasi / item.anggaran) * 100) : 0
+      const color = pct >= 80 ? '#15803d' : pct >= 50 ? '#b45309' : '#dc2626'
+      let srx = sx
+      const subVals = ['', '', item.sub_komponen || '—', fmtRp(item.anggaran), fmtRp(item.realisasi), fmtRp(Math.abs(sisa)) + (sisa < 0 ? '*' : ''), `${pct}%`]
+      subVals.forEach((v, ci) => {
+        const col = ci === 6 ? color : '#111'
+        doc.font(ci === 2 ? f.R : f.R).fontSize(7.5).fillColor(col).text(v, srx + 2, y + 4, { width: COLS[ci].w - 4, align: COLS[ci].align, ellipsis: true })
+        srx += COLS[ci].w
+      })
+      y += ROW_H
+    })
+  }
+
+  // Grand total
+  if (y + 20 > ph - 30) { doc.addPage(); y = 30 }
+  y += 4
+  doc.rect(sx, y, tableW, 20).fillAndStroke('#1e3a5f', '#1e3a5f')
+  let tx = sx
+  const grandSerapan = grandAng > 0 ? `${Math.round((grandReal / grandAng) * 100)}%` : '—'
+  ;['', 'TOTAL KESELURUHAN', '', fmtRp(grandAng), fmtRp(grandReal), fmtRp(Math.abs(grandAng - grandReal)), grandSerapan].forEach((v, ci) => {
+    doc.font(f.B).fontSize(8).fillColor('#fff').text(v, tx + 2, y + 6, { width: COLS[ci].w - 4, align: COLS[ci].align })
+    tx += COLS[ci].w
+  })
+  y += 28
+
+  // TTD
+  const ttdX = sx + tableW - 180
+  doc.font(f.R).fontSize(8.5).fillColor('#000')
+    .text(`${s.kota || '___________'}, ${tglNow}`, ttdX, y, { width: 180, align: 'center' })
+    .text('Kepala Sekolah,', ttdX, y + 12, { width: 180, align: 'center' })
+  if (s.ttd_kepsek) { try { doc.image(s.ttd_kepsek, ttdX + 65, y + 18, { fit: [50, 30] }) } catch {} }
+  doc.font(f.B).fontSize(8.5).text(s.kepala || '____________________', ttdX, y + 55, { width: 180, align: 'center' })
+  doc.font(f.R).fontSize(7.5).text(`NIP. ${s.nip || '____________________'}`, ttdX, y + 65, { width: 180, align: 'center' })
 
   doc.end()
   return fn
