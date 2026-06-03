@@ -3,7 +3,8 @@ import {
   LayoutDashboard, School, Users, BookOpen, Settings,
   PenLine, Printer, GraduationCap, LogOut, ChevronRight,
   BarChart2, Upload, FileSpreadsheet, Hash, Trophy, ClipboardList,
-  BookOpen, BookMarked, TableProperties, Mail, Briefcase
+  BookOpen, BookMarked, TableProperties, Mail, Briefcase,
+  CreditCard, DollarSign, UserPlus, FileText, Users
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '../../hooks/useAuth'
@@ -13,6 +14,7 @@ export type PageKey =
   | 'semester' | 'nilai' | 'rekap-nilai' | 'import-nilai'
   | 'rekap-cetak' | 'angkatan' | 'penomoran-surat' | 'ranking' | 'wali-kelas'
   | 'buku-kleper' | 'buku-induk' | 'leger-nilai' | 'surat' | 'kepegawaian'
+  | 'kartu-ujian' | 'peserta-ujian' | 'rekap-bos' | 'ppdb' | 'raport'
 
 interface NavItem {
   key: PageKey
@@ -37,6 +39,11 @@ const NAV: NavItem[] = [
   { key: 'leger-nilai', label: 'Leger Nilai Kelas',    icon: <TableProperties className="w-4 h-4" /> },
   { key: 'surat',       label: 'Surat-Surat',          icon: <Mail className="w-4 h-4" /> },
   { key: 'kepegawaian', label: 'Kepegawaian',          icon: <Briefcase className="w-4 h-4" />, group: 'KEPEGAWAIAN' },
+  { key: 'raport',      label: 'Raport Semester',      icon: <BookOpen className="w-4 h-4" />, group: 'RAPORT & UJIAN' },
+  { key: 'kartu-ujian',   label: 'Kartu Peserta Ujian',  icon: <CreditCard className="w-4 h-4" /> },
+  { key: 'peserta-ujian',  label: 'Peserta Ujian',         icon: <Users className="w-4 h-4" /> },
+  { key: 'rekap-bos',   label: 'Rekap BOS',            icon: <DollarSign className="w-4 h-4" />, group: 'KEUANGAN' },
+  { key: 'ppdb',        label: 'PPDB',                 icon: <UserPlus className="w-4 h-4" />, group: 'PPDB' },
   { key: 'import-nilai',    label: 'Import Nilai',        icon: <Upload className="w-4 h-4" /> },
   { key: 'penomoran-surat', label: 'Penomoran Surat',     icon: <Hash className="w-4 h-4" /> },
   { key: 'rekap-cetak', label: 'Rekap & Cetak PDF',  icon: <Printer className="w-4 h-4" /> },
