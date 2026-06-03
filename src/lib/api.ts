@@ -30,6 +30,50 @@ export const skTugasApi = {
   save:   (d:any)      => api?.skTugas.save(d),
   delete: (id:number)  => api?.skTugas.delete(id),
 }
+export const raportApi = {
+  periodeList:   ()                         => api?.raport.periodeList(),
+  periodeAdd:    (d:any)                    => api?.raport.periodeAdd(d),
+  periodeUpdate: (id:number,d:any)          => api?.raport.periodeUpdate(id,d),
+  periodeDelete: (id:number)                => api?.raport.periodeDelete(id),
+  mapelList:     (periode_id:number)        => api?.raport.mapelList(periode_id),
+  mapelSave:     (d:any)                    => api?.raport.mapelSave(d),
+  mapelDelete:   (id:number)                => api?.raport.mapelDelete(id),
+  siswaList:     (periode_id:number)        => api?.raport.siswaList(periode_id),
+  siswaSave:     (pid:number,sid:number,d:any) => api?.raport.siswaSave(pid,sid,d),
+  nilaiGet:      (pid:number,sid:number)    => api?.raport.nilaiGet(pid,sid),
+  nilaiSave:     (pid:number,sid:number,mid:number,d:any) => api?.raport.nilaiSave(pid,sid,mid,d),
+  nilaiBulk:     (pid:number,mid:number,rows:any[]) => api?.raport.nilaiBulk(pid,mid,rows),
+  rekap:         (pid:number)               => api?.raport.rekap(pid),
+  exportExcel:   (pid:number)               => api?.raport.exportExcel(pid),
+}
+export const pesertaApi = {
+  list:     (config_id:number)            => api?.peserta.list(config_id),
+  saveBulk: (config_id:number, rows:any[]) => api?.peserta.saveBulk(config_id, rows),
+  autoNo:   (config_id:number)            => api?.peserta.autoNo(config_id),
+}
+export const kartuUjianApi = {
+  list:     ()                      => api?.kartuUjian.list(),
+  add:      (d:any)                 => api?.kartuUjian.add(d),
+  update:   (id:number,d:any)       => api?.kartuUjian.update(id,d),
+  delete:   (id:number)             => api?.kartuUjian.delete(id),
+  getSiswa: (cfg_id:number,kelas_id?:number) => api?.kartuUjian.getSiswa(cfg_id,kelas_id),
+}
+export const bosApi = {
+  list:    (tahun?:string,sem?:string) => api?.bos.list(tahun,sem),
+  save:    (d:any)                     => api?.bos.save(d),
+  delete:  (id:number)                 => api?.bos.delete(id),
+  summary: (tahun?:string,sem?:string) => api?.bos.summary(tahun,sem),
+}
+export const ppdbApi = {
+  list:            (q?:string,status?:string) => api?.ppdb.list(q,status),
+  add:             (d:any)                    => api?.ppdb.add(d),
+  update:          (id:number,d:any)          => api?.ppdb.update(id,d),
+  delete:          (id:number)                => api?.ppdb.delete(id),
+  updateStatus:    (id:number,status:string)  => api?.ppdb.updateStatus(id,status),
+  terimaJadiSiswa: (id:number)               => api?.ppdb.terimaJadiSiswa(id),
+  stats:           ()                         => api?.ppdb.stats(),
+  generateNo:      ()                         => api?.ppdb.generateNo(),
+}
 export const pdfCetakApi = {
   bukuKleper:     ()                         => api?.pdfCetak.bukuKleper(),
   bukuIndukSiswa: (angkatan_id?: number)     => api?.pdfCetak.bukuIndukSiswa(angkatan_id),
@@ -40,6 +84,9 @@ export const pdfCetakApi = {
   jurnal:         (kelas_id: number, bulan?: string) => api?.pdfCetak.jurnal(kelas_id, bulan),
   absensiSiswa:   (kelas_id: number, bulan?: string) => api?.pdfCetak.absensiSiswa(kelas_id, bulan),
   surat:          (params: any)              => api?.pdfCetak.surat(params),
+  kartuUjian:     (cfg_id:number,kelas_id?:number) => api?.pdfCetak.kartuUjian(cfg_id,kelas_id),
+  kartuUjianPeserta: (cfg_id:number)              => api?.pdfCetak.kartuUjianPeserta(cfg_id),
+  rekapBOS:       (tahun?:string,sem?:string)      => api?.pdfCetak.rekapBOS(tahun,sem),
 }
 export const legerApi = {
   get: (kelas_id:number) => api?.leger.get(kelas_id),
@@ -85,6 +132,8 @@ export const sekolahApi = {
   removeLogo: (field: string) => api?.sekolah.removeLogo(field),
   uploadKop:  ()              => api?.sekolah.uploadKop(),
   hapusKop:   ()              => api?.sekolah.hapusKop(),
+  uploadTtd:  ()              => api?.sekolah.uploadTtd(),
+  hapusTtd:   ()              => api?.sekolah.hapusTtd(),
 }
 export const semesterApi = {
   list:    ()             => api?.semester.list() ?? [],
