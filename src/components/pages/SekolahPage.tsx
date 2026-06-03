@@ -145,6 +145,29 @@ export function SekolahPage({ showToast }: { showToast: (msg: string, type?: any
                   Upload gambar kop surat (PNG/JPG). Jika diisi, kop ini yang dipakai — pengaturan font & logo di bawah diabaikan.
                 </p>
               </div>
+
+              {/* TTD Kepala Sekolah */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-sm font-semibold text-gray-700 mb-1">Tanda Tangan Kepala Sekolah</p>
+                <p className="text-xs text-gray-500 mb-3">Upload gambar TTD PNG (transparan). Muncul di kartu ujian &amp; rekap BOS.</p>
+                {form.ttd_kepsek ? (
+                  <div className="flex items-center gap-3">
+                    <img src={'file://' + form.ttd_kepsek} alt="TTD" className="h-16 border border-gray-200 rounded p-1 bg-gray-50"/>
+                    <button onClick={async () => { await sekolahApi.hapusTtd(); showToast('TTD dihapus'); sekolahApi.get().then((d:any)=>d&&setForm(d)) }}
+                      className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50">Hapus TTD</button>
+                  </div>
+                ) : (
+                  <button onClick={async () => {
+                      const r = await sekolahApi.uploadTtd() as any
+                      if (r?.ok) { showToast('TTD berhasil diupload'); sekolahApi.get().then((d:any)=>d&&setForm(d)) }
+                      else showToast?.('Gagal upload TTD','error')
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold bg-gray-700 text-white rounded-lg hover:bg-gray-800">
+                    Upload TTD Kepala Sekolah
+                  </button>
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <button
                   onClick={async () => {
