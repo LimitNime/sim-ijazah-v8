@@ -122,6 +122,117 @@ function initDB() {
       kelas TEXT, no_sk TEXT, tgl_sk TEXT,
       tahun_ajaran TEXT, keterangan TEXT
     );
+    -- ── MODUL RAPORT ─────────────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS raport_periode (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      label TEXT NOT NULL,
+      tahun_ajaran TEXT NOT NULL,
+      semester TEXT NOT NULL DEFAULT 'Ganjil',
+      angkatan_id INTEGER,
+      is_aktif INTEGER DEFAULT 0,
+      tgl_mulai TEXT, tgl_selesai TEXT,
+      bobot_uh REAL DEFAULT 40,
+      bobot_uts REAL DEFAULT 25,
+      bobot_pas REAL DEFAULT 30,
+      bobot_hadir REAL DEFAULT 5,
+      jumlah_hari_efektif INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS raport_mapel (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      periode_id INTEGER NOT NULL,
+      nama TEXT NOT NULL,
+      kelompok TEXT DEFAULT 'A',
+      urutan INTEGER DEFAULT 99,
+      guru TEXT,
+      kkm INTEGER DEFAULT 75,
+      jumlah_bab INTEGER DEFAULT 3
+    );
+
+    CREATE TABLE IF NOT EXISTS raport_siswa (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      periode_id INTEGER NOT NULL,
+      siswa_id INTEGER NOT NULL,
+      kelas TEXT,
+      no_absen INTEGER,
+      hadir INTEGER DEFAULT 0,
+      sakit INTEGER DEFAULT 0,
+      izin INTEGER DEFAULT 0,
+      alpha INTEGER DEFAULT 0,
+      catatan_wali TEXT,
+      UNIQUE(periode_id, siswa_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS raport_nilai (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      periode_id INTEGER NOT NULL,
+      siswa_id INTEGER NOT NULL,
+      mapel_id INTEGER NOT NULL,
+      uh1 REAL, uh2 REAL, uh3 REAL, uh4 REAL, uh5 REAL, uh6 REAL,
+      uts REAL,
+      pas REAL,
+      nilai_akhir REAL,
+      predikat TEXT,
+      deskripsi TEXT,
+      UNIQUE(periode_id, siswa_id, mapel_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS kartu_ujian_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nama_ujian TEXT NOT NULL,
+      jenis_ujian TEXT DEFAULT 'PAS',
+      tahun_ajaran TEXT,
+      semester TEXT,
+      tgl_mulai TEXT,
+      tgl_selesai TEXT,
+      lokasi TEXT,
+      keterangan TEXT,
+      angkatan_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS rekap_bos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tahun TEXT NOT NULL,
+      semester TEXT NOT NULL DEFAULT 'Ganjil',
+      komponen TEXT NOT NULL,
+      sub_komponen TEXT,
+      anggaran REAL DEFAULT 0,
+      realisasi REAL DEFAULT 0,
+      keterangan TEXT,
+      created_at TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ppdb (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      no_pendaftaran TEXT,
+      nama TEXT NOT NULL,
+      jk TEXT DEFAULT 'L',
+      tempat_lahir TEXT,
+      tgl_lahir TEXT,
+      agama TEXT DEFAULT 'Islam',
+      asal_sekolah TEXT,
+      nisn TEXT,
+      nik TEXT,
+      alamat TEXT,
+      no_hp TEXT,
+      nama_ayah TEXT,
+      nama_ibu TEXT,
+      pekerjaan_ayah TEXT,
+      pekerjaan_ibu TEXT,
+      no_hp_ortu TEXT,
+      nilai_un REAL,
+      nilai_mtk REAL,
+      nilai_ipa REAL,
+      nilai_bindo REAL,
+      nilai_bing REAL,
+      status TEXT DEFAULT 'Daftar',
+      gelombang TEXT,
+      tgl_daftar TEXT DEFAULT (date('now','localtime')),
+      keterangan TEXT,
+      foto TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS surat_keluar (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       jenis TEXT, siswa_id INTEGER, no_surat TEXT,
@@ -787,6 +898,387 @@ function registerIPC() {
     tx()
     return { ok: true }
   })
+  // ── RAPORT ───────────────────────────────────────────────────────────────
+  // Periode
+  ipcMain.handle('raport:periode_list', () =>
+    db.prepare('SELECT r.*,a.nama as nama_angkatan FROM raport_periode r LEFT JOIN angkatan a ON a.id=r.angkatan_id ORDER BY r.tahun_ajaran DESC,r.semester').all()
+  )
+  ipcMain.handle('raport:periode_add', (_, d) => {
+    const r = db.prepare('INSERT INTO raport_periode(label,tahun_ajaran,semester,angkatan_id,is_aktif,tgl_mulai,tgl_selesai,bobot_uh,bobot_uts,bobot_pas,bobot_hadir,jumlah_hari_efektif) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(d.label||'',d.tahun_ajaran||'',d.semester||'Ganjil',d.angkatan_id||null,d.is_aktif?1:0,d.tgl_mulai||'',d.tgl_selesai||'',d.bobot_uh??40,d.bobot_uts??25,d.bobot_pas??30,d.bobot_hadir??5,d.jumlah_hari_efektif||0)
+    return { ok:true, id:r.lastInsertRowid }
+  })
+  ipcMain.handle('raport:periode_update', (_, id, d) => {
+    db.prepare('UPDATE raport_periode SET label=?,tahun_ajaran=?,semester=?,angkatan_id=?,is_aktif=?,tgl_mulai=?,tgl_selesai=?,bobot_uh=?,bobot_uts=?,bobot_pas=?,bobot_hadir=?,jumlah_hari_efektif=? WHERE id=?').run(d.label||'',d.tahun_ajaran||'',d.semester||'Ganjil',d.angkatan_id||null,d.is_aktif?1:0,d.tgl_mulai||'',d.tgl_selesai||'',d.bobot_uh??40,d.bobot_uts??25,d.bobot_pas??30,d.bobot_hadir??5,d.jumlah_hari_efektif||0,id)
+    return { ok:true }
+  })
+  ipcMain.handle('raport:periode_delete', (_, id) => {
+    db.prepare('DELETE FROM raport_nilai WHERE periode_id=?').run(id)
+    db.prepare('DELETE FROM raport_siswa WHERE periode_id=?').run(id)
+    db.prepare('DELETE FROM raport_mapel WHERE periode_id=?').run(id)
+    db.prepare('DELETE FROM raport_periode WHERE id=?').run(id)
+    return { ok:true }
+  })
+
+  // Mapel raport
+  ipcMain.handle('raport:mapel_list', (_, periode_id) =>
+    db.prepare('SELECT * FROM raport_mapel WHERE periode_id=? ORDER BY COALESCE(urutan,99),nama').all(periode_id)
+  )
+  ipcMain.handle('raport:mapel_save', (_, d) => {
+    if (d.id) {
+      db.prepare('UPDATE raport_mapel SET nama=?,kelompok=?,urutan=?,guru=?,kkm=?,jumlah_bab=? WHERE id=?').run(d.nama||'',d.kelompok||'A',d.urutan||99,d.guru||'',d.kkm||75,d.jumlah_bab||3,d.id)
+    } else {
+      db.prepare('INSERT INTO raport_mapel(periode_id,nama,kelompok,urutan,guru,kkm,jumlah_bab) VALUES(?,?,?,?,?,?,?)').run(d.periode_id,d.nama||'',d.kelompok||'A',d.urutan||99,d.guru||'',d.kkm||75,d.jumlah_bab||3)
+    }
+    return { ok:true }
+  })
+  ipcMain.handle('raport:mapel_delete', (_, id) => {
+    db.prepare('DELETE FROM raport_nilai WHERE mapel_id=?').run(id)
+    db.prepare('DELETE FROM raport_mapel WHERE id=?').run(id)
+    return { ok:true }
+  })
+
+  // Siswa raport (dari angkatan terhubung)
+  ipcMain.handle('raport:siswa_list', (_, periode_id) => {
+    const p = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+    if (!p) return []
+    let siswa = []
+    if (p.angkatan_id) {
+      siswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(p.angkatan_id)
+    } else {
+      siswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    return siswa.map((s, i) => {
+      const rs = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=? AND siswa_id=?').get(periode_id, s.id)
+      return { ...s, rs_id: rs?.id||null, kelas: rs?.kelas||s.kelas||'', no_absen: rs?.no_absen||(i+1), hadir: rs?.hadir||0, sakit: rs?.sakit||0, izin: rs?.izin||0, alpha: rs?.alpha||0, catatan_wali: rs?.catatan_wali||'' }
+    })
+  })
+  ipcMain.handle('raport:siswa_save', (_, periode_id, siswa_id, d) => {
+    const exists = db.prepare('SELECT id FROM raport_siswa WHERE periode_id=? AND siswa_id=?').get(periode_id, siswa_id)
+    if (exists) {
+      db.prepare('UPDATE raport_siswa SET kelas=?,no_absen=?,hadir=?,sakit=?,izin=?,alpha=?,catatan_wali=? WHERE id=?').run(d.kelas||'',d.no_absen||0,d.hadir||0,d.sakit||0,d.izin||0,d.alpha||0,d.catatan_wali||'',exists.id)
+    } else {
+      db.prepare('INSERT INTO raport_siswa(periode_id,siswa_id,kelas,no_absen,hadir,sakit,izin,alpha,catatan_wali) VALUES(?,?,?,?,?,?,?,?,?)').run(periode_id,siswa_id,d.kelas||'',d.no_absen||0,d.hadir||0,d.sakit||0,d.izin||0,d.alpha||0,d.catatan_wali||'')
+    }
+    return { ok:true }
+  })
+
+  // Nilai raport
+  ipcMain.handle('raport:nilai_get', (_, periode_id, siswa_id) =>
+    db.prepare('SELECT * FROM raport_nilai WHERE periode_id=? AND siswa_id=?').all(periode_id, siswa_id)
+  )
+  ipcMain.handle('raport:nilai_save', (_, periode_id, siswa_id, mapel_id, d) => {
+    const p = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+    if (!p) return { ok:false }
+    // Hitung nilai akhir
+    const uhs = [d.uh1,d.uh2,d.uh3,d.uh4,d.uh5,d.uh6].filter(v => v !== null && v !== undefined && v !== '')
+    const avg_uh = uhs.length ? uhs.reduce((a,b) => a + parseFloat(b), 0) / uhs.length : null
+    const uts = d.uts !== '' && d.uts !== null && d.uts !== undefined ? parseFloat(d.uts) : null
+    const pas = d.pas !== '' && d.pas !== null && d.pas !== undefined ? parseFloat(d.pas) : null
+    // Kehadiran: (hadir / hari_efektif) * 100
+    const rs = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=? AND siswa_id=?').get(periode_id, siswa_id)
+    const hariEfektif = p.jumlah_hari_efektif || 1
+    const hadirPct = rs ? ((rs.hadir / hariEfektif) * 100) : 0
+    let nilai_akhir = null
+    if (avg_uh !== null || uts !== null || pas !== null) {
+      const vh = avg_uh ?? 0, vuts = uts ?? 0, vpas = pas ?? 0
+      nilai_akhir = Math.round(
+        (vh * (p.bobot_uh/100) + vuts * (p.bobot_uts/100) + vpas * (p.bobot_pas/100) + hadirPct * (p.bobot_hadir/100)) * 10
+      ) / 10
+    }
+    let predikat = ''
+    if (nilai_akhir !== null) {
+      if (nilai_akhir >= 93) predikat = 'A'
+      else if (nilai_akhir >= 84) predikat = 'B+'
+      else if (nilai_akhir >= 75) predikat = 'B'
+      else if (nilai_akhir >= 65) predikat = 'C+'
+      else if (nilai_akhir >= 55) predikat = 'C'
+      else predikat = 'D'
+    }
+    db.prepare('INSERT INTO raport_nilai(periode_id,siswa_id,mapel_id,uh1,uh2,uh3,uh4,uh5,uh6,uts,pas,nilai_akhir,predikat,deskripsi) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(periode_id,siswa_id,mapel_id) DO UPDATE SET uh1=excluded.uh1,uh2=excluded.uh2,uh3=excluded.uh3,uh4=excluded.uh4,uh5=excluded.uh5,uh6=excluded.uh6,uts=excluded.uts,pas=excluded.pas,nilai_akhir=excluded.nilai_akhir,predikat=excluded.predikat,deskripsi=excluded.deskripsi').run(periode_id,siswa_id,mapel_id,d.uh1??null,d.uh2??null,d.uh3??null,d.uh4??null,d.uh5??null,d.uh6??null,d.uts??null,d.pas??null,nilai_akhir,predikat,d.deskripsi||'')
+    return { ok:true, nilai_akhir, predikat }
+  })
+  ipcMain.handle('raport:nilai_bulk', (_, periode_id, mapel_id, rows) => {
+    const p = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+    if (!p) return { ok:false }
+    const upsert = db.prepare('INSERT INTO raport_nilai(periode_id,siswa_id,mapel_id,uh1,uh2,uh3,uh4,uh5,uh6,uts,pas,nilai_akhir,predikat,deskripsi) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(periode_id,siswa_id,mapel_id) DO UPDATE SET uh1=excluded.uh1,uh2=excluded.uh2,uh3=excluded.uh3,uh4=excluded.uh4,uh5=excluded.uh5,uh6=excluded.uh6,uts=excluded.uts,pas=excluded.pas,nilai_akhir=excluded.nilai_akhir,predikat=excluded.predikat,deskripsi=excluded.deskripsi')
+    const tx = db.transaction(() => {
+      for (const r of rows) {
+        const uhs = [r.uh1,r.uh2,r.uh3,r.uh4,r.uh5,r.uh6].filter(v=>v!==null&&v!==undefined&&v!=='')
+        const avg_uh = uhs.length ? uhs.reduce((a,b)=>a+parseFloat(b),0)/uhs.length : null
+        const uts = r.uts!==''&&r.uts!=null ? parseFloat(r.uts) : null
+        const pas = r.pas!==''&&r.pas!=null ? parseFloat(r.pas) : null
+        const rs = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=? AND siswa_id=?').get(periode_id, r.siswa_id)
+        const hariEfektif = p.jumlah_hari_efektif || 1
+        const hadirPct = rs ? ((rs.hadir/hariEfektif)*100) : 0
+        let na = null
+        if (avg_uh!==null||uts!==null||pas!==null) {
+          na = Math.round(((avg_uh??0)*(p.bobot_uh/100)+(uts??0)*(p.bobot_uts/100)+(pas??0)*(p.bobot_pas/100)+hadirPct*(p.bobot_hadir/100))*10)/10
+        }
+        let pr = ''
+        if (na!==null) { if(na>=93)pr='A'; else if(na>=84)pr='B+'; else if(na>=75)pr='B'; else if(na>=65)pr='C+'; else if(na>=55)pr='C'; else pr='D' }
+        upsert.run(periode_id,r.siswa_id,mapel_id,r.uh1??null,r.uh2??null,r.uh3??null,r.uh4??null,r.uh5??null,r.uh6??null,r.uts??null,r.pas??null,na,pr,r.deskripsi||'')
+      }
+    })
+    tx()
+    return { ok:true }
+  })
+  ipcMain.handle('raport:rekap', (_, periode_id) => {
+    const p = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+    if (!p) return { siswa:[], mapel:[], nilai:[] }
+    let siswa = []
+    if (p.angkatan_id) {
+      siswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(p.angkatan_id)
+    } else {
+      siswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    const mapel = db.prepare('SELECT * FROM raport_mapel WHERE periode_id=? ORDER BY COALESCE(urutan,99),nama').all(periode_id)
+    const nilaiAll = db.prepare('SELECT * FROM raport_nilai WHERE periode_id=?').all(periode_id)
+    const siswaRs = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=?').all(periode_id)
+    return { siswa, mapel, nilai: nilaiAll, siswaData: siswaRs, periode: p }
+  })
+
+  // Export Excel raport
+  ipcMain.handle('raport:export_excel', async (_, periode_id) => {
+    try {
+      const XLSX = require('xlsx')
+      const p = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+      if (!p) return { ok:false, error:'Periode tidak ditemukan' }
+      let siswa = []
+      if (p.angkatan_id) {
+        siswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(p.angkatan_id)
+      } else {
+        siswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const mapelList = db.prepare('SELECT * FROM raport_mapel WHERE periode_id=? ORDER BY COALESCE(urutan,99),nama').all(periode_id)
+      const nilaiAll = db.prepare('SELECT * FROM raport_nilai WHERE periode_id=?').all(periode_id)
+      const siswaRs = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=?').all(periode_id)
+      const nilaiMap = {}
+      for (const n of nilaiAll) { nilaiMap[`${n.siswa_id}_${n.mapel_id}`] = n }
+      const rsMap = {}
+      for (const rs of siswaRs) { rsMap[rs.siswa_id] = rs }
+
+      const wb = XLSX.utils.book_new()
+
+      // Sheet 1: Rekap Nilai
+      const header1 = ['No','NISN','Nama Siswa','Kelas',...mapelList.map(m=>m.nama),'Rata-rata']
+      const rows1 = siswa.map((s,i) => {
+        const vals = mapelList.map(m => { const n = nilaiMap[`${s.id}_${m.id}`]; return n?.nilai_akhir??'' })
+        const filled = vals.filter(v=>v!=='')
+        const avg = filled.length ? Math.round(filled.reduce((a,b)=>a+b,0)/filled.length*10)/10 : ''
+        const rs = rsMap[s.id]
+        return [i+1, s.nisn||'', s.nama, rs?.kelas||s.kelas||'', ...vals, avg]
+      })
+      const ws1 = XLSX.utils.aoa_to_sheet([header1,...rows1])
+      XLSX.utils.book_append_sheet(wb, ws1, 'Rekap Nilai')
+
+      // Sheet 2: Absensi
+      const header2 = ['No','NISN','Nama Siswa','Hadir','Sakit','Izin','Alpha','Total Absen','% Hadir']
+      const rows2 = siswa.map((s,i) => {
+        const rs = rsMap[s.id]
+        const hadir = rs?.hadir||0, sakit = rs?.sakit||0, izin = rs?.izin||0, alpha = rs?.alpha||0
+        const totalAbsen = sakit+izin+alpha
+        const hariEfektif = p.jumlah_hari_efektif||1
+        const pct = Math.round((hadir/hariEfektif)*100)
+        return [i+1, s.nisn||'', s.nama, hadir, sakit, izin, alpha, totalAbsen, `${pct}%`]
+      })
+      const ws2 = XLSX.utils.aoa_to_sheet([header2,...rows2])
+      XLSX.utils.book_append_sheet(wb, ws2, 'Absensi')
+
+      // Per-mapel sheets
+      for (const m of mapelList) {
+        const headerM = ['No','NISN','Nama Siswa','UH1','UH2','UH3','UH4','UH5','UH6','Avg UH','UTS','PAS','Nilai Akhir','Predikat']
+        const rowsM = siswa.map((s,i) => {
+          const n = nilaiMap[`${s.id}_${m.id}`]
+          const uhs = [n?.uh1,n?.uh2,n?.uh3,n?.uh4,n?.uh5,n?.uh6].filter(v=>v!=null)
+          const avg_uh = uhs.length ? Math.round(uhs.reduce((a,b)=>a+b,0)/uhs.length*10)/10 : ''
+          return [i+1,s.nisn||'',s.nama,n?.uh1??'',n?.uh2??'',n?.uh3??'',n?.uh4??'',n?.uh5??'',n?.uh6??'',avg_uh,n?.uts??'',n?.pas??'',n?.nilai_akhir??'',n?.predikat??'']
+        })
+        const wsM = XLSX.utils.aoa_to_sheet([headerM,...rowsM])
+        const sheetName = m.nama.slice(0,28)
+        XLSX.utils.book_append_sheet(wb, wsM, sheetName)
+      }
+
+      const filePath = path.join(outputPath, `Raport_${p.label?.replace(/\s/g,'_')}_${Date.now()}.xlsx`)
+      XLSX.writeFile(wb, filePath)
+      await shell.openPath(filePath)
+      return { ok:true, path:filePath }
+    } catch(e) { return { ok:false, error:e.message } }
+  })
+
+  // ── KARTU UJIAN ──────────────────────────────────────────────────────────
+  // Add ttd_kepsek column if not exists
+  try { db.prepare('ALTER TABLE sekolah ADD COLUMN ttd_kepsek TEXT').run() } catch {}
+  // Add ruang_per_siswa to kartu_ujian_config if not exists
+  try { db.prepare('ALTER TABLE kartu_ujian_config ADD COLUMN ruang_default TEXT').run() } catch {}
+
+  // Peserta ujian table (assign ruang per siswa per config)
+  db.prepare(`CREATE TABLE IF NOT EXISTS peserta_ujian (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    config_id INTEGER NOT NULL,
+    siswa_id INTEGER NOT NULL,
+    no_peserta TEXT,
+    ruang TEXT,
+    kursi TEXT,
+    keterangan TEXT,
+    UNIQUE(config_id, siswa_id)
+  )`).run()
+
+  ipcMain.handle('kartu_ujian:list', () => db.prepare('SELECT k.*,a.nama as nama_angkatan FROM kartu_ujian_config k LEFT JOIN angkatan a ON a.id=k.angkatan_id ORDER BY k.created_at DESC').all())
+  ipcMain.handle('kartu_ujian:add', (_, d) => {
+    const r = db.prepare('INSERT INTO kartu_ujian_config(nama_ujian,jenis_ujian,tahun_ajaran,semester,tgl_mulai,tgl_selesai,lokasi,keterangan,angkatan_id) VALUES(?,?,?,?,?,?,?,?,?)').run(d.nama_ujian||'',d.jenis_ujian||'PAS',d.tahun_ajaran||'',d.semester||'',d.tgl_mulai||'',d.tgl_selesai||'',d.lokasi||'',d.keterangan||'',d.angkatan_id||null)
+    return { ok:true, id:r.lastInsertRowid }
+  })
+  ipcMain.handle('kartu_ujian:update', (_, id, d) => {
+    db.prepare('UPDATE kartu_ujian_config SET nama_ujian=?,jenis_ujian=?,tahun_ajaran=?,semester=?,tgl_mulai=?,tgl_selesai=?,lokasi=?,keterangan=?,angkatan_id=? WHERE id=?').run(d.nama_ujian||'',d.jenis_ujian||'PAS',d.tahun_ajaran||'',d.semester||'',d.tgl_mulai||'',d.tgl_selesai||'',d.lokasi||'',d.keterangan||'',d.angkatan_id||null,id)
+    return { ok:true }
+  })
+  ipcMain.handle('kartu_ujian:delete', (_, id) => { db.prepare('DELETE FROM kartu_ujian_config WHERE id=?').run(id); return {ok:true} })
+  ipcMain.handle('kartu_ujian:get_siswa', (_, config_id, kelas_id) => {
+    const cfg = db.prepare('SELECT * FROM kartu_ujian_config WHERE id=?').get(config_id)
+    if (!cfg) return []
+    if (kelas_id) {
+      const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+      if (!k) return []
+      if (k.angkatan_id) return db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(k.angkatan_id)
+      return db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    if (cfg.angkatan_id) return db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(cfg.angkatan_id)
+    return db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+  })
+
+  // ── PESERTA UJIAN ────────────────────────────────────────────────────────
+  ipcMain.handle('peserta:list', (_, config_id) => {
+    const cfg = db.prepare('SELECT * FROM kartu_ujian_config WHERE id=?').get(config_id)
+    if (!cfg) return []
+    let siswa = []
+    if (cfg.angkatan_id) {
+      siswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(cfg.angkatan_id)
+    } else {
+      siswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    return siswa.map((s, i) => {
+      const p = db.prepare('SELECT * FROM peserta_ujian WHERE config_id=? AND siswa_id=?').get(config_id, s.id)
+      const noPeserta = p?.no_peserta || `${new Date().getFullYear().toString().slice(2)}-920-${String(i+1).padStart(3,'0')}-${cfg.semester==='Ganjil'?'1':'2'}`
+      return { ...s, no_peserta: noPeserta, ruang: p?.ruang || cfg.ruang_default || '', kursi: p?.kursi || String(i+1), keterangan: p?.keterangan || '', peserta_id: p?.id || null }
+    })
+  })
+  ipcMain.handle('peserta:save_bulk', (_, config_id, rows) => {
+    const upsert = db.prepare('INSERT INTO peserta_ujian(config_id,siswa_id,no_peserta,ruang,kursi,keterangan) VALUES(?,?,?,?,?,?) ON CONFLICT(config_id,siswa_id) DO UPDATE SET no_peserta=excluded.no_peserta,ruang=excluded.ruang,kursi=excluded.kursi,keterangan=excluded.keterangan')
+    db.transaction(() => { for (const r of rows) upsert.run(config_id, r.siswa_id, r.no_peserta||'', r.ruang||'', r.kursi||'', r.keterangan||'') })()
+    return { ok: true }
+  })
+  ipcMain.handle('peserta:auto_no', (_, config_id) => {
+    const cfg = db.prepare('SELECT * FROM kartu_ujian_config WHERE id=?').get(config_id)
+    if (!cfg) return { ok: false }
+    let siswa = []
+    if (cfg.angkatan_id) {
+      siswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(cfg.angkatan_id)
+    } else {
+      siswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+    }
+    const yr = new Date().getFullYear().toString().slice(2)
+    const sem = cfg.semester === 'Ganjil' ? '1' : '2'
+    const upsert = db.prepare('INSERT INTO peserta_ujian(config_id,siswa_id,no_peserta,ruang,kursi) VALUES(?,?,?,?,?) ON CONFLICT(config_id,siswa_id) DO UPDATE SET no_peserta=excluded.no_peserta')
+    db.transaction(() => {
+      siswa.forEach((s, i) => {
+        const no = `${yr}-920-${String(i+1).padStart(3,'0')}-${sem}`
+        const existing = db.prepare('SELECT * FROM peserta_ujian WHERE config_id=? AND siswa_id=?').get(config_id, s.id)
+        upsert.run(config_id, s.id, no, existing?.ruang||cfg.ruang_default||'', existing?.kursi||String(i+1))
+      })
+    })()
+    return { ok: true }
+  })
+  ipcMain.handle('sekolah:upload_ttd', async () => {
+    const result = await dialog.showOpenDialog({ title:'Pilih Gambar TTD Kepala Sekolah', filters:[{name:'Gambar',extensions:['png','jpg','jpeg']}], properties:['openFile'] })
+    if (result.canceled || !result.filePaths[0]) return null
+    const src = result.filePaths[0]
+    const ext = path.extname(src)
+    const dest = path.join(outputPath, '..', 'data', `ttd_kepsek${ext}`)
+    const fs = require('fs')
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.copyFileSync(src, dest)
+    db.prepare('UPDATE sekolah SET ttd_kepsek=? WHERE id=1').run(dest)
+    return { ok: true, path: dest }
+  })
+  ipcMain.handle('sekolah:hapus_ttd', () => {
+    const row = db.prepare('SELECT ttd_kepsek FROM sekolah WHERE id=1').get()
+    if (row?.ttd_kepsek) { try { require('fs').unlinkSync(row.ttd_kepsek) } catch {} }
+    db.prepare('UPDATE sekolah SET ttd_kepsek=NULL WHERE id=1').run()
+    return { ok: true }
+  })
+
+  // ── REKAP BOS ────────────────────────────────────────────────────────────
+  ipcMain.handle('bos:list', (_, tahun, semester) => {
+    let sql = 'SELECT * FROM rekap_bos WHERE 1=1'
+    const params = []
+    if (tahun) { sql += ' AND tahun=?'; params.push(tahun) }
+    if (semester) { sql += ' AND semester=?'; params.push(semester) }
+    sql += ' ORDER BY komponen,sub_komponen'
+    return db.prepare(sql).all(...params)
+  })
+  ipcMain.handle('bos:save', (_, d) => {
+    if (d.id) {
+      db.prepare('UPDATE rekap_bos SET tahun=?,semester=?,komponen=?,sub_komponen=?,anggaran=?,realisasi=?,keterangan=? WHERE id=?').run(d.tahun||'',d.semester||'Ganjil',d.komponen||'',d.sub_komponen||'',d.anggaran||0,d.realisasi||0,d.keterangan||'',d.id)
+    } else {
+      db.prepare('INSERT INTO rekap_bos(tahun,semester,komponen,sub_komponen,anggaran,realisasi,keterangan) VALUES(?,?,?,?,?,?,?)').run(d.tahun||'',d.semester||'Ganjil',d.komponen||'',d.sub_komponen||'',d.anggaran||0,d.realisasi||0,d.keterangan||'')
+    }
+    return { ok:true }
+  })
+  ipcMain.handle('bos:delete', (_, id) => { db.prepare('DELETE FROM rekap_bos WHERE id=?').run(id); return {ok:true} })
+  ipcMain.handle('bos:summary', (_, tahun, semester) => {
+    let sql = 'SELECT komponen, SUM(anggaran) as total_anggaran, SUM(realisasi) as total_realisasi FROM rekap_bos WHERE 1=1'
+    const params = []
+    if (tahun) { sql += ' AND tahun=?'; params.push(tahun) }
+    if (semester) { sql += ' AND semester=?'; params.push(semester) }
+    sql += ' GROUP BY komponen ORDER BY komponen'
+    return db.prepare(sql).all(...params)
+  })
+
+  // ── PPDB ─────────────────────────────────────────────────────────────────
+  ipcMain.handle('ppdb:list', (_, q, status) => {
+    let sql = 'SELECT * FROM ppdb WHERE 1=1'
+    const params = []
+    if (q) { sql += ' AND (nama LIKE ? OR no_pendaftaran LIKE ? OR nisn LIKE ?)'; params.push(`%${q}%`,`%${q}%`,`%${q}%`) }
+    if (status) { sql += ' AND status=?'; params.push(status) }
+    sql += ' ORDER BY tgl_daftar DESC,nama'
+    return db.prepare(sql).all(...params)
+  })
+  ipcMain.handle('ppdb:add', (_, d) => {
+    const r = db.prepare('INSERT INTO ppdb(no_pendaftaran,nama,jk,tempat_lahir,tgl_lahir,agama,asal_sekolah,nisn,nik,alamat,no_hp,nama_ayah,nama_ibu,pekerjaan_ayah,pekerjaan_ibu,no_hp_ortu,nilai_un,nilai_mtk,nilai_ipa,nilai_bindo,nilai_bing,status,gelombang,keterangan) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(d.no_pendaftaran||'',d.nama||'',d.jk||'L',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.asal_sekolah||'',d.nisn||'',d.nik||'',d.alamat||'',d.no_hp||'',d.nama_ayah||'',d.nama_ibu||'',d.pekerjaan_ayah||'',d.pekerjaan_ibu||'',d.no_hp_ortu||'',d.nilai_un||null,d.nilai_mtk||null,d.nilai_ipa||null,d.nilai_bindo||null,d.nilai_bing||null,d.status||'Daftar',d.gelombang||'',d.keterangan||'')
+    return { ok:true, id:r.lastInsertRowid }
+  })
+  ipcMain.handle('ppdb:update', (_, id, d) => {
+    db.prepare('UPDATE ppdb SET no_pendaftaran=?,nama=?,jk=?,tempat_lahir=?,tgl_lahir=?,agama=?,asal_sekolah=?,nisn=?,nik=?,alamat=?,no_hp=?,nama_ayah=?,nama_ibu=?,pekerjaan_ayah=?,pekerjaan_ibu=?,no_hp_ortu=?,nilai_un=?,nilai_mtk=?,nilai_ipa=?,nilai_bindo=?,nilai_bing=?,status=?,gelombang=?,keterangan=? WHERE id=?').run(d.no_pendaftaran||'',d.nama||'',d.jk||'L',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.asal_sekolah||'',d.nisn||'',d.nik||'',d.alamat||'',d.no_hp||'',d.nama_ayah||'',d.nama_ibu||'',d.pekerjaan_ayah||'',d.pekerjaan_ibu||'',d.no_hp_ortu||'',d.nilai_un||null,d.nilai_mtk||null,d.nilai_ipa||null,d.nilai_bindo||null,d.nilai_bing||null,d.status||'Daftar',d.gelombang||'',d.keterangan||'',id)
+    return { ok:true }
+  })
+  ipcMain.handle('ppdb:delete', (_, id) => { db.prepare('DELETE FROM ppdb WHERE id=?').run(id); return {ok:true} })
+  ipcMain.handle('ppdb:update_status', (_, id, status) => { db.prepare('UPDATE ppdb SET status=? WHERE id=?').run(status,id); return {ok:true} })
+  ipcMain.handle('ppdb:terima_jadi_siswa', (_, id) => {
+    const p = db.prepare('SELECT * FROM ppdb WHERE id=?').get(id)
+    if (!p) return { ok:false, error:'Data tidak ditemukan' }
+    const r = db.prepare('INSERT INTO siswa(nama,jk,tempat_lahir,tgl_lahir,agama,asal_sekolah,nisn,nik,alamat,no_hp_ortu,nama_ayah,nama_ibu) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(p.nama,p.jk,p.tempat_lahir,p.tgl_lahir,p.agama,p.asal_sekolah,p.nisn,p.nik,p.alamat,p.no_hp_ortu,p.nama_ayah,p.nama_ibu)
+    db.prepare('UPDATE ppdb SET status=? WHERE id=?').run('Diterima',id)
+    return { ok:true, siswa_id:r.lastInsertRowid }
+  })
+  ipcMain.handle('ppdb:stats', () => {
+    const total = db.prepare('SELECT COUNT(*) as n FROM ppdb').get()?.n || 0
+    const daftar = db.prepare("SELECT COUNT(*) as n FROM ppdb WHERE status='Daftar'").get()?.n || 0
+    const diterima = db.prepare("SELECT COUNT(*) as n FROM ppdb WHERE status='Diterima'").get()?.n || 0
+    const ditolak = db.prepare("SELECT COUNT(*) as n FROM ppdb WHERE status='Ditolak'").get()?.n || 0
+    const cadangan = db.prepare("SELECT COUNT(*) as n FROM ppdb WHERE status='Cadangan'").get()?.n || 0
+    return { total, daftar, diterima, ditolak, cadangan }
+  })
+  ipcMain.handle('ppdb:generate_no', () => {
+    const year = new Date().getFullYear()
+    const last = db.prepare("SELECT no_pendaftaran FROM ppdb WHERE no_pendaftaran LIKE ? ORDER BY id DESC LIMIT 1").get(`${year}%`)
+    let seq = 1
+    if (last?.no_pendaftaran) {
+      const parts = last.no_pendaftaran.split('/')
+      seq = (parseInt(parts[parts.length-1]) || 0) + 1
+    }
+    return `${year}/PPDB/${String(seq).padStart(3,'0')}`
+  })
+
   // ── BUKU KLEPER ──────────────────────────────────────────────────────────
   ipcMain.handle('kleper:list', (_, q) => {
     let sql = 'SELECT * FROM siswa'
@@ -1470,6 +1962,75 @@ function registerIPC() {
     return data
   }
   ipcMain.handle('pdf:skl_siswa',         async (_, id) => { try { const data=getPDFDataSiswa(id); const f=generateSKL(outputPath,data); await shell.openPath(f); return {ok:true} } catch(e){return{ok:false,error:e.message}} })
+
+  // ── PDF: KARTU UJIAN ─────────────────────────────────────────────────────
+  ipcMain.handle('pdf:kartu_ujian', async (_, config_id, kelas_id) => {
+    try {
+      const { generateKartuUjian } = require('./pdf-generator')
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const cfg = db.prepare('SELECT k.*,a.nama as nama_angkatan FROM kartu_ujian_config k LEFT JOIN angkatan a ON a.id=k.angkatan_id WHERE k.id=?').get(config_id)
+      if (!cfg) return { ok:false, error:'Konfigurasi ujian tidak ditemukan' }
+      // Get peserta with no_peserta and ruang from peserta_ujian table
+      let baseSiswa = []
+      if (kelas_id) {
+        const k = db.prepare('SELECT * FROM kelas WHERE id=?').get(kelas_id)
+        if (k?.angkatan_id) baseSiswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(k.angkatan_id)
+        else baseSiswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      } else if (cfg.angkatan_id) {
+        baseSiswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(cfg.angkatan_id)
+      } else {
+        baseSiswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const siswaList = baseSiswa.map((s, i) => {
+        const p = db.prepare('SELECT * FROM peserta_ujian WHERE config_id=? AND siswa_id=?').get(config_id, s.id)
+        return { ...s, no_peserta: p?.no_peserta || `${i+1}`, ruang: p?.ruang || cfg.ruang_default || '', kursi: p?.kursi || '' }
+      })
+      const fn = generateKartuUjian(outputPath, { sekolah, cfg, siswaList })
+      await shell.openPath(fn)
+      return { ok:true, path:fn }
+    } catch(e) { return { ok:false, error:e.message } }
+  })
+
+  ipcMain.handle('pdf:kartu_ujian_peserta', async (_, config_id) => {
+    // Same as pdf:kartu_ujian but uses peserta table only (sorted by no_peserta)
+    try {
+      const { generateKartuUjian } = require('./pdf-generator')
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const cfg = db.prepare('SELECT k.*,a.nama as nama_angkatan FROM kartu_ujian_config k LEFT JOIN angkatan a ON a.id=k.angkatan_id WHERE k.id=?').get(config_id)
+      if (!cfg) return { ok:false, error:'Konfigurasi tidak ditemukan' }
+      let baseSiswa = []
+      if (cfg.angkatan_id) {
+        baseSiswa = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(cfg.angkatan_id)
+      } else {
+        baseSiswa = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const siswaList = baseSiswa.map((s, i) => {
+        const p = db.prepare('SELECT * FROM peserta_ujian WHERE config_id=? AND siswa_id=?').get(config_id, s.id)
+        return { ...s, no_peserta: p?.no_peserta || `${i+1}`, ruang: p?.ruang || cfg.ruang_default || '', kursi: p?.kursi || '' }
+      }).sort((a, b) => (a.no_peserta||'').localeCompare(b.no_peserta||''))
+      const fn = generateKartuUjian(outputPath, { sekolah, cfg, siswaList })
+      await shell.openPath(fn)
+      return { ok:true, path:fn }
+    } catch(e) { return { ok:false, error:e.message } }
+  })
+
+  // ── PDF: REKAP BOS ────────────────────────────────────────────────────────
+  ipcMain.handle('pdf:rekap_bos', async (_, tahun, semester) => {
+    try {
+      const { generateRekapBOS } = require('./pdf-generator')
+      const sekolah = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const jumlah_siswa = db.prepare('SELECT COUNT(*) as n FROM siswa').get()?.n || 0
+      let sql = 'SELECT * FROM rekap_bos WHERE 1=1'
+      const params = []
+      if (tahun) { sql += ' AND tahun=?'; params.push(tahun) }
+      if (semester) { sql += ' AND semester=?'; params.push(semester) }
+      sql += ' ORDER BY komponen,sub_komponen'
+      const items = db.prepare(sql).all(...params)
+      const fn = generateRekapBOS(outputPath, { sekolah, items, tahun, semester, jumlah_siswa })
+      await shell.openPath(fn)
+      return { ok:true, path:fn }
+    } catch(e) { return { ok:false, error:e.message } }
+  })
 
   // ── PDF: BUKU KLEPER ──────────────────────────────────────────────────────
   ipcMain.handle('pdf:buku_kleper', async () => {
