@@ -177,8 +177,9 @@ contextBridge.exposeInMainWorld('api', {
     jurnal:         (kelas_id, bulan)     => invoke('pdf:jurnal', kelas_id, bulan),
     absensiSiswa:   (kelas_id, bulan)     => invoke('pdf:absensi_siswa', kelas_id, bulan),
     surat:          (params)              => invoke('pdf:surat', params),
-    kartuUjian:     (cfg_id, kelas_id)    => invoke('pdf:kartu_ujian', cfg_id, kelas_id),
-    rekapBOS:       (tahun, sem)          => invoke('pdf:rekap_bos', tahun, sem),
+    kartuUjian:          (cfg_id, kelas_id) => invoke('pdf:kartu_ujian', cfg_id, kelas_id),
+    kartuUjianPeserta:   (cfg_id)          => invoke('pdf:kartu_ujian_peserta', cfg_id),
+    rekapBOS:            (tahun, sem)      => invoke('pdf:rekap_bos', tahun, sem),
   },
   leger: {
     get: kelas_id => invoke('leger:get', kelas_id),
