@@ -1105,6 +1105,47 @@ function registerIPC() {
     } catch(e) { return { ok:false, error:e.message } }
   })
 
+  // ── PDF RAPORT ────────────────────────────────────────────────────────────
+  ipcMain.handle('pdf:raport_siswa', async (_, periode_id, siswa_id) => {
+    try {
+      const { generateRaportSiswa } = require('./pdf-generator')
+      const sekolah   = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const periode   = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+      if (!periode) return { ok:false, error:'Periode tidak ditemukan' }
+      const siswa     = db.prepare('SELECT * FROM siswa WHERE id=?').get(siswa_id)
+      if (!siswa) return { ok:false, error:'Siswa tidak ditemukan' }
+      const rsSiswa   = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=? AND siswa_id=?').get(periode_id, siswa_id)
+      const mapelList = db.prepare('SELECT * FROM raport_mapel WHERE periode_id=? ORDER BY COALESCE(urutan,99),nama').all(periode_id)
+      const nilaiList = db.prepare('SELECT * FROM raport_nilai WHERE periode_id=? AND siswa_id=?').all(periode_id, siswa_id)
+      const nilaiMap  = {}
+      for (const n of nilaiList) nilaiMap[n.mapel_id] = n
+      const fn = generateRaportSiswa(outputPath, { sekolah, periode, siswa, rsSiswa, mapelList, nilaiMap })
+      await shell.openPath(fn)
+      return { ok:true, path:fn }
+    } catch(e) { return { ok:false, error:e.message } }
+  })
+
+  ipcMain.handle('pdf:raport_all', async (_, periode_id) => {
+    try {
+      const { generateRaportAll } = require('./pdf-generator')
+      const sekolah   = db.prepare('SELECT * FROM sekolah WHERE id=1').get()
+      const periode   = db.prepare('SELECT * FROM raport_periode WHERE id=?').get(periode_id)
+      if (!periode) return { ok:false, error:'Periode tidak ditemukan' }
+      let siswaList   = []
+      if (periode.angkatan_id) {
+        siswaList = db.prepare('SELECT s.* FROM angkatan_siswa a JOIN siswa s ON s.id=a.siswa_id WHERE a.angkatan_id=? ORDER BY COALESCE(s.no_urut,99999),s.nama').all(periode.angkatan_id)
+      } else {
+        siswaList = db.prepare('SELECT * FROM siswa ORDER BY COALESCE(no_urut,99999),nama').all()
+      }
+      const mapelList = db.prepare('SELECT * FROM raport_mapel WHERE periode_id=? ORDER BY COALESCE(urutan,99),nama').all(periode_id)
+      const nilaiAll  = db.prepare('SELECT * FROM raport_nilai WHERE periode_id=?').all(periode_id)
+      const rsAll     = db.prepare('SELECT * FROM raport_siswa WHERE periode_id=?').all(periode_id)
+      const fn = generateRaportAll(outputPath, { sekolah, periode, siswaList, mapelList, nilaiAll, rsAll })
+      await shell.openPath(fn)
+      return { ok:true, path:fn }
+    } catch(e) { return { ok:false, error:e.message } }
+  })
+
   // ── KARTU UJIAN ──────────────────────────────────────────────────────────
   // Add ttd_kepsek column if not exists
   try { db.prepare('ALTER TABLE sekolah ADD COLUMN ttd_kepsek TEXT').run() } catch {}
