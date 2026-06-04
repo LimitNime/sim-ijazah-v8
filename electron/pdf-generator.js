@@ -2762,157 +2762,178 @@ function generateSurat(outputPath, { sekolah: s, siswa, jenis, noSurat, keperlua
 
 
 // ══════════════════════════════════════════════════════════════════════════
-//  KARTU PESERTA UJIAN — 4 kartu per halaman A4 portrait
-//  Format: logo kiri, judul tengah, data siswa, TTD kepsek kiri bawah
+//  KARTU PESERTA UJIAN — 6 kartu per halaman A4 portrait (3 baris × 2 kolom)
+//  Logo dari sekolah.logo_sekolah, TTD dari sekolah.ttd_kepsek
 // ══════════════════════════════════════════════════════════════════════════
 function generateKartuUjian(outputPath, { sekolah: s, cfg, siswaList }) {
   const PDFDocument = require('pdfkit')
   const fs          = require('fs')
   const path        = require('path')
 
-  // A4 portrait
+  // A4 portrait: 595.28 x 841.89 pt
   const PW = 595.28, PH = 841.89
-  const PAGE_ML = 20, PAGE_MR = 20, PAGE_MT = 20, PAGE_MB = 20
+  const PML = 18, PMR = 18, PMT = 18, PMB = 18
 
-  const doc = new PDFDocument({ size: [PW, PH], margins: { top: PAGE_MT, bottom: PAGE_MB, left: PAGE_ML, right: PAGE_MR }, autoFirstPage: false })
-  const fn  = path.join(outputPath, `kartu_ujian_${cfg.nama_ujian.replace(/\s/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}_${Date.now()}.pdf`)
-  doc.pipe(fs.createWriteStream(fn))
+  const COLS      = 2
+  const ROWS      = 3
+  const GAP_X     = 8
+  const GAP_Y     = 8
+  const CARD_W    = (PW - PML - PMR - GAP_X * (COLS - 1)) / COLS    // ~280 pt
+  const CARD_H    = (PH - PMT - PMB - GAP_Y * (ROWS - 1)) / ROWS    // ~265 pt
 
-  const f = fontSetup(doc, s)
-
-  // Card area
-  const CARD_W  = (PW - PAGE_ML - PAGE_MR - 10) / 2   // 2 kolom, gap 10
-  const CARD_H  = (PH - PAGE_MT - PAGE_MB - 10) / 2   // 2 baris, gap 10
-  const GAP_X   = 10
-  const GAP_Y   = 10
-
-  // Grid positions: [col, row] -> [x, y]
-  const cardPos = [
-    [PAGE_ML,                          PAGE_MT],
-    [PAGE_ML + CARD_W + GAP_X,         PAGE_MT],
-    [PAGE_ML,                          PAGE_MT + CARD_H + GAP_Y],
-    [PAGE_ML + CARD_W + GAP_X,         PAGE_MT + CARD_H + GAP_Y],
-  ]
-
-  const drawCard = (cx, cy, siswa, noIdx) => {
-    // Border luar kartu
-    doc.rect(cx, cy, CARD_W, CARD_H).lineWidth(1).stroke('#333')
-
-    const PAD = 8
-    const innerX = cx + PAD
-    const innerW = CARD_W - PAD * 2
-    let y = cy + PAD
-
-    // ── KOP IMAGE (logo sekolah sebagai kop) ──────────────────────────────
-    const LOGO_SZ = 48
-    if (s.logo_sekolah) {
-      try {
-        doc.image(s.logo_sekolah, innerX, y, { fit: [LOGO_SZ, LOGO_SZ] })
-      } catch {}
+  const cardPos = []
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      cardPos.push([
+        PML + col * (CARD_W + GAP_X),
+        PMT + row * (CARD_H + GAP_Y)
+      ])
     }
-
-    // Judul di sebelah kanan logo
-    const titleX = innerX + LOGO_SZ + 6
-    const titleW = innerW - LOGO_SZ - 6
-    let ty = y + 2
-    doc.font(f.B).fontSize(7).fillColor('#000')
-      .text('KARTU PESERTA', titleX, ty, { width: titleW, align: 'center' })
-    ty += 9
-    doc.font(f.B).fontSize(8.5).fillColor('#000')
-      .text(cfg.nama_ujian.toUpperCase(), titleX, ty, { width: titleW, align: 'center' })
-    ty += 11
-    // Nama sekolah
-    const namaSekolah = (s.nama || '').toUpperCase()
-    doc.font(f.B).fontSize(7.5)
-      .text(namaSekolah, titleX, ty, { width: titleW, align: 'center' })
-    ty += 10
-    // Tahun ajaran
-    doc.font(f.R).fontSize(7)
-      .text(`TAHUN PELAJARAN ${cfg.tahun_ajaran || s.tahun_ajaran || ''}`, titleX, ty, { width: titleW, align: 'center' })
-
-    // Garis pemisah kop
-    const kopBottom = cy + LOGO_SZ + PAD + 6
-    y = Math.max(kopBottom, ty + 12)
-    doc.moveTo(cx, y).lineTo(cx + CARD_W, y).lineWidth(1.5).stroke('#000')
-    doc.moveTo(cx, y + 3).lineTo(cx + CARD_W, y + 3).lineWidth(0.4).stroke('#000')
-    y += 8
-
-    // ── DATA SISWA ────────────────────────────────────────────────────────
-    const LW = 55  // label width
-    const FS  = 8.5
-    const ROW_GAP = 12
-
-    const drawRow = (label, value) => {
-      doc.font(f.R).fontSize(FS - 1).fillColor('#444').text(label, innerX, y, { width: LW })
-      doc.font(f.R).fontSize(FS - 1).fillColor('#000').text(':', innerX + LW, y, { width: 8 })
-      doc.font(f.B).fontSize(FS).fillColor('#000').text(value || '—', innerX + LW + 8, y, { width: innerW - LW - 8 })
-      // Garis bawah field
-      doc.moveTo(innerX + LW + 8, y + FS + 1).lineTo(cx + CARD_W - PAD, y + FS + 1).lineWidth(0.3).stroke('#ccc')
-      y += ROW_GAP
-    }
-
-    drawRow('Nama', siswa.nama)
-    drawRow('No. Peserta', siswa.no_peserta || `${noIdx}`)
-    drawRow('Kelas', siswa.kelas || siswa.kelas_ujian || (cfg.nama_angkatan ? `IX (${['Satu','Dua','Tiga','Empat','Lima','Enam','Tujuh','Delapan','Sembilan'][noIdx-1]||noIdx})` : '—'))
-    drawRow('Ruang', siswa.ruang || cfg.ruang_default || ':')
-
-    y += 4
-    // Garis ruang kosong untuk isi manual
-    doc.moveTo(innerX, y).lineTo(cx + CARD_W - PAD, y).lineWidth(0.5).stroke('#999')
-    y += 10
-
-    // ── TTD KEPSEK ────────────────────────────────────────────────────────
-    const TTD_W = (innerW - 10) / 2
-    const ttdX  = innerX                    // kiri
-    const infoX = innerX + TTD_W + 10       // kanan: kota + ttd info
-
-    // Kiri: tanda tangan gambar
-    doc.font(f.R).fontSize(6.5).fillColor('#555')
-      .text(`${s.kota || '___________'}, ${fmtBulanThn()}`, ttdX, y, { width: TTD_W, align: 'center' })
-    y += 8
-    doc.font(f.R).fontSize(6.5).fillColor('#555')
-      .text('Kepala Sekolah,', ttdX, y, { width: TTD_W, align: 'center' })
-    y += 4
-
-    const TTD_IMG_H = 28
-    if (s.ttd_kepsek) {
-      try {
-        doc.image(s.ttd_kepsek, ttdX + (TTD_W - 50) / 2, y, { fit: [50, TTD_IMG_H] })
-      } catch {}
-    } else if (s.kop_image) {
-      // Fallback: kosong dengan garis
-      doc.rect(ttdX + (TTD_W - 50) / 2, y, 50, TTD_IMG_H).stroke('#ddd')
-    }
-    y += TTD_IMG_H
-
-    doc.font(f.B).fontSize(7).fillColor('#000')
-      .text(s.kepala || '____________________', ttdX, y, { width: TTD_W, align: 'center' })
-    y += 8
-    doc.font(f.R).fontSize(6).fillColor('#555')
-      .text(`NIP. ${s.nip || '____________________'}`, ttdX, y, { width: TTD_W, align: 'center' })
-
-    // Kanan bawah: pesan
-    const msgY = cy + CARD_H - PAD - 18
-    doc.font(f.I).fontSize(6).fillColor('#777')
-      .text('Selama Ujian Kartu Ini Harap Dibawa', infoX, msgY, { width: TTD_W, align: 'center' })
   }
 
-  // ── Halaman ───────────────────────────────────────────────────────────────
-  const CARDS_PER_PAGE = 4
+  const doc = new PDFDocument({ size: [PW, PH], autoFirstPage: false })
+  const fn  = path.join(outputPath, 'kartu_ujian_' + (cfg.nama_ujian||'ujian').replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') + '_' + Date.now() + '.pdf')
+  doc.pipe(fs.createWriteStream(fn))
+  const f   = fontSetup(doc, s)
+
+  const CARDS_PER_PAGE = COLS * ROWS   // 6
+
+  const drawCard = (cx, cy, sw, noIdx) => {
+    const PAD  = 7
+    const IW   = CARD_W - PAD * 2   // inner width
+
+    // Outer border
+    doc.rect(cx, cy, CARD_W, CARD_H).lineWidth(1).stroke('#222')
+
+    // ── HEADER: logo kiri + judul kanan ──────────────────────────────────
+    const LOGO_SZ = 44
+    let headerH   = LOGO_SZ + 6
+
+    // Logo dari sekolah.logo_sekolah
+    if (s.logo_sekolah) {
+      try {
+        doc.image(s.logo_sekolah, cx + PAD, cy + PAD, { fit: [LOGO_SZ, LOGO_SZ] })
+      } catch (e) {}
+    }
+
+    const TX  = cx + PAD + LOGO_SZ + 5
+    const TW  = CARD_W - PAD - LOGO_SZ - 5 - PAD
+    let   ty  = cy + PAD + 1
+
+    doc.font(f.B).fontSize(6.5).fillColor('#000')
+       .text('KARTU PESERTA', TX, ty, { width: TW, align: 'center' })
+    ty += 8
+
+    // Nama ujian (bold, wrap jika panjang)
+    const ujianLines = cfg.nama_ujian ? cfg.nama_ujian.toUpperCase() : ''
+    doc.font(f.B).fontSize(7.5).fillColor('#000')
+       .text(ujianLines, TX, ty, { width: TW, align: 'center' })
+    ty = doc.y + 1
+
+    // Nama sekolah
+    const namaSekolah = (s.nama || 'NAMA SEKOLAH').toUpperCase()
+    doc.font(f.B).fontSize(7).fillColor('#1e3a5f')
+       .text(namaSekolah, TX, ty, { width: TW, align: 'center' })
+    ty = doc.y + 1
+
+    // Tahun pelajaran
+    const taPelajaran = cfg.tahun_ajaran || s.tahun_ajaran || ''
+    if (taPelajaran) {
+      doc.font(f.R).fontSize(6.5).fillColor('#555')
+         .text('TAHUN PELAJARAN ' + taPelajaran, TX, ty, { width: TW, align: 'center' })
+    }
+
+    // Garis bawah header (double line)
+    const lineY = cy + headerH + PAD + 1
+    doc.moveTo(cx, lineY).lineTo(cx + CARD_W, lineY).lineWidth(1.5).stroke('#000')
+    doc.moveTo(cx, lineY + 3).lineTo(cx + CARD_W, lineY + 3).lineWidth(0.4).stroke('#000')
+
+    // ── DATA SISWA ────────────────────────────────────────────────────────
+    let y    = lineY + 9
+    const LW = 50   // label width
+    const FS = 8
+    const RG = 12   // row gap
+
+    const drawRow = (label, value, bold) => {
+      doc.font(f.R).fontSize(FS - 1.5).fillColor('#555')
+         .text(label, cx + PAD, y, { width: LW })
+      doc.font(f.R).fontSize(FS - 1.5).fillColor('#000')
+         .text(':', cx + PAD + LW, y, { width: 7 })
+      doc.font(bold ? f.B : f.R).fontSize(FS).fillColor('#000')
+         .text(value || '—', cx + PAD + LW + 7, y, { width: IW - LW - 7, ellipsis: true })
+      // underline field
+      doc.moveTo(cx + PAD + LW + 7, y + FS + 0.5)
+         .lineTo(cx + CARD_W - PAD, y + FS + 0.5)
+         .lineWidth(0.25).stroke('#ddd')
+      y += RG
+    }
+
+    drawRow('Nama',       sw.nama,       true)
+    drawRow('No. Peserta', sw.no_peserta || String(noIdx), false)
+
+    // Kelas: ambil dari siswa.kelas, atau kelas_ujian, fallback IX
+    const kelasVal = sw.kelas || sw.kelas_ujian || ''
+    drawRow('Kelas', kelasVal, false)
+    drawRow('Ruang', sw.ruang || cfg.ruang_default || '____', false)
+
+    y += 2
+
+    // Garis kosong bawah (area kursi dll)
+    doc.moveTo(cx, y).lineTo(cx + CARD_W, y).lineWidth(0.5).stroke('#aaa')
+    y += 5
+
+    // ── BAGIAN BAWAH: TTD kiri, pesan kanan ──────────────────────────────
+    const bottomArea = cy + CARD_H - PAD
+    const ttdY       = bottomArea - 46   // posisi area TTD dari atas
+    const TTD_W      = (IW - 8) / 2
+    const ttdX       = cx + PAD
+
+    // Kota + tanggal
+    doc.font(f.R).fontSize(6).fillColor('#555')
+       .text((s.kota || '') + ', ' + fmtBulanThn(), ttdX, ttdY, { width: TTD_W, align: 'center' })
+    doc.font(f.R).fontSize(6).fillColor('#555')
+       .text('Kepala Sekolah,', ttdX, ttdY + 7, { width: TTD_W, align: 'center' })
+
+    // TTD image
+    const TTD_IMG_H = 22
+    const TTD_IMG_W = 44
+    if (s.ttd_kepsek) {
+      try {
+        doc.image(s.ttd_kepsek, ttdX + (TTD_W - TTD_IMG_W) / 2, ttdY + 14, { fit: [TTD_IMG_W, TTD_IMG_H] })
+      } catch (e) {}
+    }
+
+    // Nama kepala sekolah (bold + underline)
+    const namaKepsek = s.kepala || '____________________'
+    doc.font(f.B).fontSize(6.5).fillColor('#000')
+       .text(namaKepsek, ttdX, ttdY + 38, { width: TTD_W, align: 'center' })
+    doc.moveTo(ttdX + 2, ttdY + 47)
+       .lineTo(ttdX + TTD_W - 2, ttdY + 47)
+       .lineWidth(0.4).stroke('#000')
+    doc.font(f.R).fontSize(5.5).fillColor('#555')
+       .text('NIP. ' + (s.nip || '____________________'), ttdX, ttdY + 48, { width: TTD_W, align: 'center' })
+
+    // Pesan kanan bawah
+    const msgX = ttdX + TTD_W + 8
+    const msgY = cy + CARD_H - PAD - 8
+    doc.font(f.I).fontSize(5.5).fillColor('#888')
+       .text('Selama Ujian Kartu Ini Harap Dibawa', msgX, msgY, { width: TTD_W, align: 'center' })
+  }
+
+  // ── Generate pages ───────────────────────────────────────────────────────
   for (let i = 0; i < siswaList.length; i++) {
-    const posIdx = i % CARDS_PER_PAGE
-    if (posIdx === 0) doc.addPage()
-    const [cx, cy] = cardPos[posIdx]
+    if (i % CARDS_PER_PAGE === 0) doc.addPage()
+    const posIdx      = i % CARDS_PER_PAGE
+    const [cx, cy]    = cardPos[posIdx]
     drawCard(cx, cy, siswaList[i], i + 1)
   }
 
-  // Padding kartu terakhir jika tidak genap 4
-  if (siswaList.length % CARDS_PER_PAGE !== 0) {
-    const remaining = CARDS_PER_PAGE - (siswaList.length % CARDS_PER_PAGE)
-    const startIdx  = siswaList.length % CARDS_PER_PAGE
-    for (let i = 0; i < remaining; i++) {
-      const [cx, cy] = cardPos[startIdx + i]
-      doc.rect(cx, cy, CARD_W, CARD_H).lineWidth(0.5).dash(4, { space: 3 }).stroke('#ddd')
+  // Fill remaining slots on last page with dashed placeholder
+  const lastPage = siswaList.length % CARDS_PER_PAGE
+  if (lastPage !== 0) {
+    for (let i = lastPage; i < CARDS_PER_PAGE; i++) {
+      const [cx, cy] = cardPos[i]
+      doc.rect(cx, cy, CARD_W, CARD_H).lineWidth(0.4).dash(5, { space: 4 }).stroke('#ccc')
       doc.undash()
     }
   }
@@ -2920,15 +2941,6 @@ function generateKartuUjian(outputPath, { sekolah: s, cfg, siswaList }) {
   doc.end()
   return fn
 }
-
-// Helper bulan tahun untuk TTD
-function fmtBulanThn() {
-  const d   = new Date()
-  const bln = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
-  return `${bln[d.getMonth()]} ${d.getFullYear()}`
-}
-
-
 // ══════════════════════════════════════════════════════════════════════════
 //  REKAP BOS — PDF landscape
 // ══════════════════════════════════════════════════════════════════════════
