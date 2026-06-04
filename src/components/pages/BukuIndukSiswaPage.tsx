@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BookMarked, Plus, Pencil, Trash2, Eye, X, ChevronLeft } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge } from '../ui'
+import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge, TextInput, DropDown } from '../ui'
 import { siswaApi, angkatanApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -114,7 +114,7 @@ function DetailView({ siswa, onClose, onEdit }: { siswa: any; onClose: ()=>void;
 function FormModal({ open, mode, form, setForm, onClose, onSave, saving }: any) {
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
   const F = ({ label, k, type='text', placeholder='' }: any) => (
-    <Input label={label} value={form[k]||''} onChange={v=>set(k,v)} type={type} placeholder={placeholder}/>
+    <TextInput label={label} value={form[k]||''} onChange={v=>set(k,v)} type={type} placeholder={placeholder}/>
   )
   return (
     <Modal open={open} title={mode==='add'?'Tambah Data Siswa':'Edit Data Siswa'} size="xl" onClose={onClose}
@@ -125,8 +125,8 @@ function FormModal({ open, mode, form, setForm, onClose, onSave, saving }: any) 
           <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-3">Identitas Siswa</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><F label="Nama Lengkap *" k="nama" placeholder="Nama lengkap sesuai akta"/></div>
-            <Select label="Jenis Kelamin" value={form.jk||'L'} onChange={v=>set('jk',v)} options={JK_OPT}/>
-            <Select label="Agama" value={form.agama||'Islam'} onChange={v=>set('agama',v)} options={AGAMA_OPT}/>
+            <DropDown label="Jenis Kelamin" value={form.jk||'L'} onChange={v=>set('jk',v)} options={JK_OPT}/>
+            <DropDown label="Agama" value={form.agama||'Islam'} onChange={v=>set('agama',v)} options={AGAMA_OPT}/>
             <F label="NISN" k="nisn" placeholder="10 digit"/>
             <F label="NIS / NISM" k="nism"/>
             <F label="NIK" k="nik" placeholder="16 digit"/>
@@ -134,7 +134,7 @@ function FormModal({ open, mode, form, setForm, onClose, onSave, saving }: any) 
             <F label="Tanggal Lahir" k="tgl_lahir" type="date"/>
             <F label="Anak Ke" k="anak_ke" type="number"/>
             <F label="Jumlah Saudara" k="jml_saudara" type="number"/>
-            <Select label="Status Anak" value={form.status_anak||'Kandung'} onChange={v=>set('status_anak',v)} options={STATUS_OPT}/>
+            <DropDown label="Status Anak" value={form.status_anak||'Kandung'} onChange={v=>set('status_anak',v)} options={STATUS_OPT}/>
           </div>
         </div>
         {/* Alamat */}
