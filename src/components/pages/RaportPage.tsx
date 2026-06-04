@@ -4,8 +4,8 @@ import {
   Settings, Users, Table, FileSpreadsheet, RefreshCw,
   CheckCircle, AlertCircle, Download, GraduationCap
 } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge, SearchBar } from '../ui'
-import { raportApi, angkatanApi } from '../../lib/api'
+import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge, SearchBar, TextInput, DropDown } from '../ui'
+import { raportApi, angkatanApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 type Tab = 'periode'|'mapel'|'siswa'|'input-nilai'|'rekap'
@@ -102,17 +102,17 @@ function TabPeriode({ periodeList, angkatanList, onReload, showToast, onOpen }: 
         onClose={()=>setModal(m=>({...m,open:false}))}
         footer={<><Button variant="ghost" onClick={()=>setModal(m=>({...m,open:false}))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Input label="Label Periode *" value={modal.form.label||''} onChange={v=>set('label',v)} placeholder="Raport Semester Ganjil 2024/2025"/>
+          <TextInput label="Label Periode *" value={modal.form.label||''} onChange={v=>set('label',v)} placeholder="Raport Semester Ganjil 2024/2025"/>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Tahun Ajaran" value={modal.form.tahun_ajaran||''} onChange={v=>set('tahun_ajaran',v)} placeholder="2024/2025"/>
-            <Select label="Semester" value={modal.form.semester||'Ganjil'} onChange={v=>set('semester',v)} options={SEM_OPT}/>
+            <TextInput label="Tahun Ajaran" value={modal.form.tahun_ajaran||''} onChange={v=>set('tahun_ajaran',v)} placeholder="2024/2025"/>
+            <DropDown label="Semester" value={modal.form.semester||'Ganjil'} onChange={v=>set('semester',v)} options={SEM_OPT}/>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Tanggal Mulai" value={modal.form.tgl_mulai||''} onChange={v=>set('tgl_mulai',v)} type="date"/>
-            <Input label="Tanggal Selesai" value={modal.form.tgl_selesai||''} onChange={v=>set('tgl_selesai',v)} type="date"/>
+            <TextInput label="Tanggal Mulai" value={modal.form.tgl_mulai||''} onChange={v=>set('tgl_mulai',v)} type="date"/>
+            <TextInput label="Tanggal Selesai" value={modal.form.tgl_selesai||''} onChange={v=>set('tgl_selesai',v)} type="date"/>
           </div>
-          <Input label="Jumlah Hari Efektif (untuk hitung % kehadiran)" value={String(modal.form.jumlah_hari_efektif||0)} onChange={v=>set('jumlah_hari_efektif',Number(v))} type="number"/>
-          <Select label="Angkatan" value={String(modal.form.angkatan_id||'')} onChange={v=>set('angkatan_id',v)} options={angOpt}/>
+          <TextInput label="Jumlah Hari Efektif (untuk hitung % kehadiran)" value={String(modal.form.jumlah_hari_efektif||0)} onChange={v=>set('jumlah_hari_efektif',Number(v))} type="number"/>
+          <DropDown label="Angkatan" value={String(modal.form.angkatan_id||'')} onChange={v=>set('angkatan_id',v)} options={angOpt}/>
 
           <div className="bg-blue-50 rounded-xl p-3">
             <p className="text-xs font-bold text-blue-700 mb-2">Bobot Penilaian (harus total 100%)</p>
@@ -224,11 +224,11 @@ function TabMapel({ periode, onReload, showToast }: any) {
         onClose={()=>setModal(m=>({...m,open:false}))}
         footer={<><Button variant="ghost" onClick={()=>setModal(m=>({...m,open:false}))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Input label="Nama Mata Pelajaran *" value={modal.form.nama||''} onChange={v=>set('nama',v)} placeholder="Matematika"/>
-          <Input label="Nama Guru Pengampu" value={modal.form.guru||''} onChange={v=>set('guru',v)} placeholder="Nama guru"/>
+          <TextInput label="Nama Mata Pelajaran *" value={modal.form.nama||''} onChange={v=>set('nama',v)} placeholder="Matematika"/>
+          <TextInput label="Nama Guru Pengampu" value={modal.form.guru||''} onChange={v=>set('guru',v)} placeholder="Nama guru"/>
           <div className="grid grid-cols-2 gap-3">
-            <Select label="Kelompok" value={modal.form.kelompok||'A'} onChange={v=>set('kelompok',v)} options={KEL_OPT}/>
-            <Input label="KKM" value={String(modal.form.kkm||75)} onChange={v=>set('kkm',Number(v))} type="number"/>
+            <DropDown label="Kelompok" value={modal.form.kelompok||'A'} onChange={v=>set('kelompok',v)} options={KEL_OPT}/>
+            <TextInput label="KKM" value={String(modal.form.kkm||75)} onChange={v=>set('kkm',Number(v))} type="number"/>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -240,7 +240,7 @@ function TabMapel({ periode, onReload, showToast }: any) {
               </div>
               <p className="text-xs text-blue-700 font-semibold mt-1">{modal.form.jumlah_bab||3} bab → {modal.form.jumlah_bab||3} kolom UH</p>
             </div>
-            <Input label="Urutan Tampil" value={String(modal.form.urutan||99)} onChange={v=>set('urutan',Number(v))} type="number"/>
+            <TextInput label="Urutan Tampil" value={String(modal.form.urutan||99)} onChange={v=>set('urutan',Number(v))} type="number"/>
           </div>
         </div>
       </Modal>
@@ -571,6 +571,8 @@ function TabRekap({ periode, showToast }: any) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [printingAll, setPrintingAll] = useState(false)
+  const [printingSiswa, setPrintingSiswa] = useState<number|null>(null)
 
   const load = useCallback(async()=>{
     setLoading(true)
@@ -601,11 +603,16 @@ function TabRekap({ periode, showToast }: any) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-2 flex-wrap">
         <button onClick={load} className="p-1.5 hover:bg-gray-100 rounded-lg"><RefreshCw className="w-4 h-4 text-gray-500"/></button>
         <button onClick={handleExport} disabled={exporting}
           className="flex items-center gap-2 px-3 py-1.5 bg-green-700 text-white text-sm rounded-lg hover:bg-green-800 disabled:opacity-50">
           <FileSpreadsheet className="w-4 h-4"/> {exporting?'Mengekspor...':'Export Excel'}
+        </button>
+        <button onClick={async()=>{ setPrintingAll(true); const r:any=await pdfCetakApi.raportAll(periode.id); if(!r?.ok) alert(r?.error||'Gagal'); setPrintingAll(false) }}
+          disabled={printingAll}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-700 text-white text-sm rounded-lg hover:bg-blue-800 disabled:opacity-50">
+          <Download className="w-4 h-4"/> {printingAll?'Membuat PDF...':'Cetak Semua Raport'}
         </button>
       </div>
 
@@ -627,6 +634,7 @@ function TabRekap({ periode, showToast }: any) {
                       </th>
                     ))}
                     <th className="px-2 py-2 text-center border-l border-gray-400 min-w-[55px] bg-green-900/40">Rata²</th>
+                    <th className="px-2 py-2 text-center border-l border-gray-400 w-16 bg-blue-900/40">Cetak</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -651,6 +659,13 @@ function TabRekap({ periode, showToast }: any) {
                         })}
                         <td className="px-2 py-2 text-center border-l border-gray-200 bg-green-50/40">
                           <span className={clsx('font-bold text-sm', rata===null?'text-gray-300':'text-gray-800')}>{rata??'—'}</span>
+                      </td>
+                      <td className="px-2 py-2 text-center border-l border-gray-200">
+                        <button onClick={async()=>{ setPrintingSiswa(s.id); const r:any=await pdfCetakApi.raportSiswa(periode.id,s.id); if(!r?.ok) alert(r?.error||'Gagal'); setPrintingSiswa(null) }}
+                          disabled={printingSiswa===s.id}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap">
+                          {printingSiswa===s.id?'...':'📄 PDF'}
+                        </button>
                         </td>
                       </tr>
                     )
