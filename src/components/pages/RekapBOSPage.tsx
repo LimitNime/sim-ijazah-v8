@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { DollarSign, Plus, Pencil, Trash2, Printer, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, PageHeader } from '../ui'
+import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, TextInput, DropDown } from '../ui'
 import { bosApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -257,8 +257,8 @@ export function RekapBOSPage({ showToast }: { showToast:(msg:string,type?:any)=>
         onClose={()=>setModal(m=>({...m,open:false}))}
         footer={<><Button variant="ghost" onClick={()=>setModal(m=>({...m,open:false}))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Select label="Komponen *" value={modal.form.komponen||''} onChange={v=>setModal(m=>({...m,form:{...m.form,komponen:v}}))} options={kompOpt}/>
-          <Input label="Sub Komponen" value={modal.form.sub_komponen||''} onChange={v=>setModal(m=>({...m,form:{...m.form,sub_komponen:v}}))} placeholder="Mis: Pembelian ATK, Pembayaran Listrik, dst"/>
+          <DropDown label="Komponen *" value={modal.form.komponen||''} onChange={v=>setModal(m=>({...m,form:{...m.form,komponen:v}}))} options={kompOpt}/>
+          <TextInput label="Sub Komponen" value={modal.form.sub_komponen||''} onChange={v=>setModal(m=>({...m,form:{...m.form,sub_komponen:v}}))} placeholder="Mis: Pembelian ATK, Pembayaran Listrik, dst"/>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Anggaran (Rp)</label>
@@ -271,7 +271,7 @@ export function RekapBOSPage({ showToast }: { showToast:(msg:string,type?:any)=>
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
             </div>
           </div>
-          <Input label="Keterangan" value={modal.form.keterangan||''} onChange={v=>setModal(m=>({...m,form:{...m.form,keterangan:v}}))} placeholder="Opsional"/>
+          <TextInput label="Keterangan" value={modal.form.keterangan||''} onChange={v=>setModal(m=>({...m,form:{...m.form,keterangan:v}}))} placeholder="Opsional"/>
         </div>
       </Modal>
 
