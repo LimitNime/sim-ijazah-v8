@@ -4,7 +4,7 @@ import {
   Plus, Pencil, Trash2, Save, RefreshCw, ChevronLeft,
   Users, GraduationCap, Shuffle, Printer, Download
 } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge, Table } from '../ui'
+import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge, Table, TextInput, DropDown } from '../ui'
 import { kelasApi, denahApi, jadwalApi, jurnalApi, absensiApi, angkatanApi, mapelApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -140,12 +140,12 @@ function TabKelas({ kelasList, angkatanList, showToast, onReload, onSelect }: an
       <Modal open={modal.open} title={modal.mode==='add'?'Tambah Kelas':'Edit Kelas'} onClose={()=>setModal(m=>({...m,open:false}))}
         footer={<><Button variant="ghost" onClick={()=>setModal(m=>({...m,open:false}))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Input label="Nama Kelas *" value={modal.form.nama} onChange={v=>setModal(m=>({...m,form:{...m.form,nama:v}}))} placeholder="Contoh: VII A" />
-          <Select label="Tingkat" value={modal.form.tingkat} onChange={v=>setModal(m=>({...m,form:{...m.form,tingkat:v}}))} options={TINGKAT} />
-          <Input label="Tahun Ajaran" value={modal.form.tahun_ajaran} onChange={v=>setModal(m=>({...m,form:{...m.form,tahun_ajaran:v}}))} placeholder="2024/2025" />
-          <Input label="Nama Wali Kelas" value={modal.form.wali_kelas} onChange={v=>setModal(m=>({...m,form:{...m.form,wali_kelas:v}}))} placeholder="Nama guru" />
-          <Input label="Kapasitas (jumlah kursi)" value={String(modal.form.kapasitas)} onChange={v=>setModal(m=>({...m,form:{...m.form,kapasitas:v}}))} type="number" />
-          <Select label="Hubungkan ke Angkatan (opsional)" value={String(modal.form.angkatan_id||'')} onChange={v=>setModal(m=>({...m,form:{...m.form,angkatan_id:v}}))}
+          <TextInput label="Nama Kelas *" value={modal.form.nama} onChange={v=>setModal(m=>({...m,form:{...m.form,nama:v}}))} placeholder="Contoh: VII A" />
+          <DropDown label="Tingkat" value={modal.form.tingkat} onChange={v=>setModal(m=>({...m,form:{...m.form,tingkat:v}}))} options={TINGKAT} />
+          <TextInput label="Tahun Ajaran" value={modal.form.tahun_ajaran} onChange={v=>setModal(m=>({...m,form:{...m.form,tahun_ajaran:v}}))} placeholder="2024/2025" />
+          <TextInput label="Nama Wali Kelas" value={modal.form.wali_kelas} onChange={v=>setModal(m=>({...m,form:{...m.form,wali_kelas:v}}))} placeholder="Nama guru" />
+          <TextInput label="Kapasitas (jumlah kursi)" value={String(modal.form.kapasitas)} onChange={v=>setModal(m=>({...m,form:{...m.form,kapasitas:v}}))} type="number" />
+          <DropDown label="Hubungkan ke Angkatan (opsional)" value={String(modal.form.angkatan_id||'')} onChange={v=>setModal(m=>({...m,form:{...m.form,angkatan_id:v}}))}
             options={[{value:'',label:'— Tidak dihubungkan —'},...angkatanList.map((a:any)=>({value:String(a.id),label:a.nama}))]} />
         </div>
       </Modal>
@@ -404,14 +404,14 @@ function TabJadwal({ kelasList, selectedKelas, setSelectedKelas, mapelList, show
           onClose={()=>setEditCell(null)}
           footer={<><Button variant="ghost" onClick={()=>setEditCell(null)}>Batal</Button><Button onClick={saveCell}>Simpan</Button></>}>
           <div className="space-y-3">
-            <Select label="Mata Pelajaran" value={cellForm.nama_mapel} onChange={v=>setCellForm((f:any)=>({...f,nama_mapel:v}))} options={mapelOpt}/>
-            <Input label="Atau ketik nama mapel" value={cellForm.nama_mapel} onChange={v=>setCellForm((f:any)=>({...f,nama_mapel:v}))} placeholder="Nama mata pelajaran"/>
-            <Input label="Nama Guru" value={cellForm.guru} onChange={v=>setCellForm((f:any)=>({...f,guru:v}))} placeholder="Nama guru pengampu"/>
+            <DropDown label="Mata Pelajaran" value={cellForm.nama_mapel} onChange={v=>setCellForm((f:any)=>({...f,nama_mapel:v}))} options={mapelOpt}/>
+            <TextInput label="Atau ketik nama mapel" value={cellForm.nama_mapel} onChange={v=>setCellForm((f:any)=>({...f,nama_mapel:v}))} placeholder="Nama mata pelajaran"/>
+            <TextInput label="Nama Guru" value={cellForm.guru} onChange={v=>setCellForm((f:any)=>({...f,guru:v}))} placeholder="Nama guru pengampu"/>
             <div className="grid grid-cols-2 gap-2">
-              <Input label="Jam Mulai" value={cellForm.jam_mulai} onChange={v=>setCellForm((f:any)=>({...f,jam_mulai:v}))} placeholder="07:00" type="time"/>
-              <Input label="Jam Selesai" value={cellForm.jam_selesai} onChange={v=>setCellForm((f:any)=>({...f,jam_selesai:v}))} placeholder="07:45" type="time"/>
+              <TextInput label="Jam Mulai" value={cellForm.jam_mulai} onChange={v=>setCellForm((f:any)=>({...f,jam_mulai:v}))} placeholder="07:00" type="time"/>
+              <TextInput label="Jam Selesai" value={cellForm.jam_selesai} onChange={v=>setCellForm((f:any)=>({...f,jam_selesai:v}))} placeholder="07:45" type="time"/>
             </div>
-            <Input label="Ruangan" value={cellForm.ruangan} onChange={v=>setCellForm((f:any)=>({...f,ruangan:v}))} placeholder="Lab IPA, Lap. Olahraga, dll"/>
+            <TextInput label="Ruangan" value={cellForm.ruangan} onChange={v=>setCellForm((f:any)=>({...f,ruangan:v}))} placeholder="Lab IPA, Lap. Olahraga, dll"/>
           </div>
         </Modal>
       )}
@@ -527,11 +527,11 @@ function TabJurnal({ kelasList, selectedKelas, setSelectedKelas, mapelList, show
         footer={<><Button variant="ghost" onClick={()=>setModal(m=>({...m,open:false}))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <Input label="Tanggal *" value={modal.form.tanggal} onChange={v=>setModal(m=>({...m,form:{...m.form,tanggal:v}}))} type="date"/>
-            <Input label="Jam Ke" value={String(modal.form.jam_ke||1)} onChange={v=>setModal(m=>({...m,form:{...m.form,jam_ke:Number(v)}}))} type="number"/>
+            <TextInput label="Tanggal *" value={modal.form.tanggal} onChange={v=>setModal(m=>({...m,form:{...m.form,tanggal:v}}))} type="date"/>
+            <TextInput label="Jam Ke" value={String(modal.form.jam_ke||1)} onChange={v=>setModal(m=>({...m,form:{...m.form,jam_ke:Number(v)}}))} type="number"/>
           </div>
-          <Select label="Mata Pelajaran" value={modal.form.nama_mapel||''} onChange={v=>setModal(m=>({...m,form:{...m.form,nama_mapel:v}}))} options={mapelOpt}/>
-          <Input label="Nama Guru" value={modal.form.guru||''} onChange={v=>setModal(m=>({...m,form:{...m.form,guru:v}}))} placeholder="Guru pengampu"/>
+          <DropDown label="Mata Pelajaran" value={modal.form.nama_mapel||''} onChange={v=>setModal(m=>({...m,form:{...m.form,nama_mapel:v}}))} options={mapelOpt}/>
+          <TextInput label="Nama Guru" value={modal.form.guru||''} onChange={v=>setModal(m=>({...m,form:{...m.form,guru:v}}))} placeholder="Guru pengampu"/>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Materi / Kegiatan *</label>
             <textarea value={modal.form.materi||''} onChange={e=>setModal(m=>({...m,form:{...m.form,materi:e.target.value}}))}
