@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, Save, RefreshCw, Printer, Hash, Search } from 'lucide-react'
-import { Button, PageHeader, Select, SearchBar } from '../ui'
+import { Button, PageHeader, Select, SearchBar, TextInput, DropDown } from '../ui'
 import { kartuUjianApi, pesertaApi, pdfCetakApi, kelasApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -101,7 +101,7 @@ export function PesertaUjianPage({ showToast }: { showToast:(msg:string,type?:an
       {/* Pilih ujian */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="md:col-span-2">
-          <Select label="Pilih Ujian" value={selConfig} onChange={v=>{setSelConfig(v);setSelKelas('')}} options={configOpt}/>
+          <DropDown label="Pilih Ujian" value={selConfig} onChange={v=>{setSelConfig(v);setSelKelas('')}} options={configOpt}/>
         </div>
         <div>
           <Select label="Filter / Cetak Per Kelas" value={selKelas} onChange={setSelKelas} options={kelasOpt}/>
