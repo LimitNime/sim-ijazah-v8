@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { UserPlus, Plus, Pencil, Trash2, Eye, X, CheckCircle, XCircle, Clock, Users, Search } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge } from '../ui'
+import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge, TextInput, DropDown } from '../ui'
 import { ppdbApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -161,7 +161,7 @@ function DetailView({ data, onClose, onEdit, onStatusChange, showToast }: any) {
 function FormModal({ open, mode, form, setForm, onClose, onSave, saving, onGenerateNo }: any) {
   const set = (k:string,v:any) => setForm((f:any)=>({...f,[k]:v}))
   const F = ({label,k,type='text',placeholder=''}:any) => (
-    <Input label={label} value={form[k]||''} onChange={v=>set(k,v)} type={type} placeholder={placeholder}/>
+    <TextInput label={label} value={form[k]||''} onChange={v=>set(k,v)} type={type} placeholder={placeholder}/>
   )
   return (
     <Modal open={open} title={mode==='add'?'Tambah Pendaftar Baru':'Edit Data Pendaftar'} size="xl"
@@ -175,8 +175,8 @@ function FormModal({ open, mode, form, setForm, onClose, onSave, saving, onGener
               <div className="flex-1"><F label="No. Pendaftaran" k="no_pendaftaran" placeholder="Auto generate"/></div>
               {mode==='add' && <button onClick={onGenerateNo} className="mt-5 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs text-gray-600 font-medium whitespace-nowrap">Generate</button>}
             </div>
-            <Select label="Gelombang" value={form.gelombang||''} onChange={v=>set('gelombang',v)} options={[{value:'',label:'—'},{value:'I',label:'Gelombang I'},{value:'II',label:'Gelombang II'},{value:'III',label:'Gelombang III'}]}/>
-            <Select label="Status" value={form.status||'Daftar'} onChange={v=>set('status',v)} options={STATUS_OPT}/>
+            <DropDown label="Gelombang" value={form.gelombang||''} onChange={v=>set('gelombang',v)} options={[{value:'',label:'—'},{value:'I',label:'Gelombang I'},{value:'II',label:'Gelombang II'},{value:'III',label:'Gelombang III'}]}/>
+            <DropDown label="Status" value={form.status||'Daftar'} onChange={v=>set('status',v)} options={STATUS_OPT}/>
           </div>
         </div>
 
@@ -184,8 +184,8 @@ function FormModal({ open, mode, form, setForm, onClose, onSave, saving, onGener
           <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-3">Identitas Calon Siswa</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2"><F label="Nama Lengkap *" k="nama" placeholder="Sesuai akta kelahiran"/></div>
-            <Select label="Jenis Kelamin" value={form.jk||'L'} onChange={v=>set('jk',v)} options={JK_OPT}/>
-            <Select label="Agama" value={form.agama||'Islam'} onChange={v=>set('agama',v)} options={AGAMA_OPT}/>
+            <DropDown label="Jenis Kelamin" value={form.jk||'L'} onChange={v=>set('jk',v)} options={JK_OPT}/>
+            <DropDown label="Agama" value={form.agama||'Islam'} onChange={v=>set('agama',v)} options={AGAMA_OPT}/>
             <F label="Tempat Lahir" k="tempat_lahir"/>
             <F label="Tanggal Lahir" k="tgl_lahir" type="date"/>
             <F label="NISN" k="nisn" placeholder="10 digit"/>
