@@ -431,3 +431,49 @@ export function SectionCard({ title, children, className }: {
     </div>
   )
 }
+
+// ── String-callback wrappers (untuk halaman yang pakai onChange={v => ...}) ──
+// Input yang memanggil onChange dengan string value langsung (bukan event)
+export function TextInput({ label, value, onChange, type='text', placeholder='', className='', disabled=false }: {
+  label?: string; value: string; onChange: (v:string)=>void;
+  type?: string; placeholder?: string; className?: string; disabled?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {label && <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>}
+      <input
+        type={type} value={value} placeholder={placeholder} disabled={disabled}
+        onChange={e => onChange(e.target.value)}
+        className={clsx(
+          'border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white placeholder-gray-400 transition-colors',
+          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+          'border-gray-300 hover:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400',
+          className
+        )}
+      />
+    </div>
+  )
+}
+
+// Select yang memanggil onChange dengan string value langsung
+export function DropDown({ label, value, onChange, options, className='' }: {
+  label?: string; value: string; onChange: (v:string)=>void;
+  options: {value:string;label:string}[]; className?: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      {label && <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>}
+      <select
+        value={value} onChange={e => onChange(e.target.value)}
+        className={clsx(
+          'border rounded-lg px-3 py-2 text-sm text-gray-900 bg-white transition-colors',
+          'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+          'border-gray-300 hover:border-gray-400',
+          className
+        )}
+      >
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  )
+}
