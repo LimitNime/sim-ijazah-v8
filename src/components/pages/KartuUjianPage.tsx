@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CreditCard, Plus, Pencil, Trash2, Printer, Users, ChevronRight, FileText } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge } from '../ui'
+import { Button, Modal, Input, Select, ConfirmDialog, PageHeader, Badge, TextInput, DropDown } from '../ui'
 import { kartuUjianApi, kelasApi, angkatanApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -276,19 +276,19 @@ export function KartuUjianPage({ showToast }: { showToast:(msg:string,type?:any)
         onClose={()=>setModal(m=>({...m,open:false}))}
         footer={<><Button variant="ghost" onClick={()=>setModal(m=>({...m,open:false}))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Input label="Nama Ujian *" value={modal.form.nama_ujian} onChange={v=>setModal(m=>({...m,form:{...m.form,nama_ujian:v}}))} placeholder="Contoh: PAS Semester Ganjil 2024/2025"/>
+          <TextInput label="Nama Ujian *" value={modal.form.nama_ujian} onChange={v=>setModal(m=>({...m,form:{...m.form,nama_ujian:v}}))} placeholder="Contoh: PAS Semester Ganjil 2024/2025"/>
           <div className="grid grid-cols-2 gap-3">
-            <Select label="Jenis Ujian" value={modal.form.jenis_ujian} onChange={v=>setModal(m=>({...m,form:{...m.form,jenis_ujian:v}}))} options={JENIS_OPT}/>
-            <Select label="Semester" value={modal.form.semester} onChange={v=>setModal(m=>({...m,form:{...m.form,semester:v}}))} options={SEM_OPT}/>
+            <DropDown label="Jenis Ujian" value={modal.form.jenis_ujian} onChange={v=>setModal(m=>({...m,form:{...m.form,jenis_ujian:v}}))} options={JENIS_OPT}/>
+            <DropDown label="Semester" value={modal.form.semester} onChange={v=>setModal(m=>({...m,form:{...m.form,semester:v}}))} options={SEM_OPT}/>
           </div>
-          <Input label="Tahun Ajaran" value={modal.form.tahun_ajaran} onChange={v=>setModal(m=>({...m,form:{...m.form,tahun_ajaran:v}}))} placeholder="2024/2025"/>
+          <TextInput label="Tahun Ajaran" value={modal.form.tahun_ajaran} onChange={v=>setModal(m=>({...m,form:{...m.form,tahun_ajaran:v}}))} placeholder="2024/2025"/>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Tanggal Mulai" value={modal.form.tgl_mulai} onChange={v=>setModal(m=>({...m,form:{...m.form,tgl_mulai:v}}))} type="date"/>
-            <Input label="Tanggal Selesai" value={modal.form.tgl_selesai} onChange={v=>setModal(m=>({...m,form:{...m.form,tgl_selesai:v}}))} type="date"/>
+            <TextInput label="Tanggal Mulai" value={modal.form.tgl_mulai} onChange={v=>setModal(m=>({...m,form:{...m.form,tgl_mulai:v}}))} type="date"/>
+            <TextInput label="Tanggal Selesai" value={modal.form.tgl_selesai} onChange={v=>setModal(m=>({...m,form:{...m.form,tgl_selesai:v}}))} type="date"/>
           </div>
-          <Input label="Lokasi / Ruangan" value={modal.form.lokasi} onChange={v=>setModal(m=>({...m,form:{...m.form,lokasi:v}}))} placeholder="Aula, Kelas VII A, dst"/>
-          <Input label="Ruang Default (berlaku untuk semua peserta jika tidak diisi manual)" value={modal.form.ruang_default||''} onChange={v=>setModal(m=>({...m,form:{...m.form,ruang_default:v}}))} placeholder="Ruang 1, Aula, Lab IPA..."/>
-          <Select label="Angkatan (opsional — kosong = semua siswa)" value={String(modal.form.angkatan_id||'')} onChange={v=>setModal(m=>({...m,form:{...m.form,angkatan_id:v}}))} options={angkatanOpt}/>
+          <TextInput label="Lokasi / Ruangan" value={modal.form.lokasi} onChange={v=>setModal(m=>({...m,form:{...m.form,lokasi:v}}))} placeholder="Aula, Kelas VII A, dst"/>
+          <TextInput label="Ruang Default (berlaku untuk semua peserta jika tidak diisi manual)" value={modal.form.ruang_default||''} onChange={v=>setModal(m=>({...m,form:{...m.form,ruang_default:v}}))} placeholder="Ruang 1, Aula, Lab IPA..."/>
+          <DropDown label="Angkatan (opsional — kosong = semua siswa)" value={String(modal.form.angkatan_id||'')} onChange={v=>setModal(m=>({...m,form:{...m.form,angkatan_id:v}}))} options={angkatanOpt}/>
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Keterangan</label>
             <textarea value={modal.form.keterangan||''} onChange={e=>setModal(m=>({...m,form:{...m.form,keterangan:e.target.value}}))}
