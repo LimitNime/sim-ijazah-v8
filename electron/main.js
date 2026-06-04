@@ -1125,11 +1125,11 @@ function registerIPC() {
 
   ipcMain.handle('kartu_ujian:list', () => db.prepare('SELECT k.*,a.nama as nama_angkatan FROM kartu_ujian_config k LEFT JOIN angkatan a ON a.id=k.angkatan_id ORDER BY k.created_at DESC').all())
   ipcMain.handle('kartu_ujian:add', (_, d) => {
-    const r = db.prepare('INSERT INTO kartu_ujian_config(nama_ujian,jenis_ujian,tahun_ajaran,semester,tgl_mulai,tgl_selesai,lokasi,keterangan,angkatan_id) VALUES(?,?,?,?,?,?,?,?,?)').run(d.nama_ujian||'',d.jenis_ujian||'PAS',d.tahun_ajaran||'',d.semester||'',d.tgl_mulai||'',d.tgl_selesai||'',d.lokasi||'',d.keterangan||'',d.angkatan_id||null)
+    const r = db.prepare('INSERT INTO kartu_ujian_config(nama_ujian,jenis_ujian,tahun_ajaran,semester,tgl_mulai,tgl_selesai,lokasi,keterangan,angkatan_id,ruang_default) VALUES(?,?,?,?,?,?,?,?,?,?)').run(d.nama_ujian||'',d.jenis_ujian||'PAS',d.tahun_ajaran||'',d.semester||'',d.tgl_mulai||'',d.tgl_selesai||'',d.lokasi||'',d.keterangan||'',d.angkatan_id||null,d.ruang_default||'')
     return { ok:true, id:r.lastInsertRowid }
   })
   ipcMain.handle('kartu_ujian:update', (_, id, d) => {
-    db.prepare('UPDATE kartu_ujian_config SET nama_ujian=?,jenis_ujian=?,tahun_ajaran=?,semester=?,tgl_mulai=?,tgl_selesai=?,lokasi=?,keterangan=?,angkatan_id=? WHERE id=?').run(d.nama_ujian||'',d.jenis_ujian||'PAS',d.tahun_ajaran||'',d.semester||'',d.tgl_mulai||'',d.tgl_selesai||'',d.lokasi||'',d.keterangan||'',d.angkatan_id||null,id)
+    db.prepare('UPDATE kartu_ujian_config SET nama_ujian=?,jenis_ujian=?,tahun_ajaran=?,semester=?,tgl_mulai=?,tgl_selesai=?,lokasi=?,keterangan=?,angkatan_id=?,ruang_default=? WHERE id=?').run(d.nama_ujian||'',d.jenis_ujian||'PAS',d.tahun_ajaran||'',d.semester||'',d.tgl_mulai||'',d.tgl_selesai||'',d.lokasi||'',d.keterangan||'',d.angkatan_id||null,d.ruang_default||'',id)
     return { ok:true }
   })
   ipcMain.handle('kartu_ujian:delete', (_, id) => { db.prepare('DELETE FROM kartu_ujian_config WHERE id=?').run(id); return {ok:true} })
