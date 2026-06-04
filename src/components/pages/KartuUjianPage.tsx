@@ -14,7 +14,7 @@ const JENIS_COLOR: Record<string,string> = {
 }
 const tglFmt = (t:string) => { try { return t ? new Date(t).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '—' } catch { return t } }
 
-const EMPTY = { nama_ujian:'', jenis_ujian:'PAS', tahun_ajaran:'', semester:'Ganjil', tgl_mulai:'', tgl_selesai:'', lokasi:'', keterangan:'', angkatan_id:'' }
+const EMPTY = { nama_ujian:'', jenis_ujian:'PAS', tahun_ajaran:'', semester:'Ganjil', tgl_mulai:'', tgl_selesai:'', lokasi:'', keterangan:'', angkatan_id:'', ruang_default:'' }
 
 // ─── Print Modal: pilih kelas/angkatan sebelum cetak ─────────────────────────
 function PrintModal({ config, kelasList, angkatanList, onClose, showToast }: any) {
@@ -43,7 +43,7 @@ function PrintModal({ config, kelasList, angkatanList, onClose, showToast }: any
     setPrinting(true)
     try {
       const kid = mode === 'kelas' && kelasId ? Number(kelasId) : undefined
-      const r: any = await pdfCetakApi.kartuUjian(config.id, kid)
+      const r: any = kid ? await pdfCetakApi.kartuUjian(config.id, kid) : await pdfCetakApi.kartuUjian(config.id)
       if (!r?.ok) showToast(r?.error || 'Gagal cetak PDF', 'error')
       else { showToast(`PDF Kartu Ujian dibuka — ${preview.length} kartu`); onClose() }
     } finally { setPrinting(false) }
@@ -165,7 +165,7 @@ export function KartuUjianPage({ showToast }: { showToast:(msg:string,type?:any)
     if (!modal.form.nama_ujian?.trim()) { showToast('Nama ujian wajib diisi','error'); return }
     setSaving(true)
     try {
-      const d = { ...modal.form, angkatan_id: modal.form.angkatan_id ? Number(modal.form.angkatan_id) : null }
+      const d = { ...modal.form, angkatan_id: modal.form.angkatan_id ? Number(modal.form.angkatan_id) : null, ruang_default: modal.form.ruang_default||'' }
       if (modal.mode==='add') await kartuUjianApi.add(d)
       else await kartuUjianApi.update(modal.form.id, d)
       setModal(m=>({...m,open:false}))
@@ -231,6 +231,12 @@ export function KartuUjianPage({ showToast }: { showToast:(msg:string,type?:any)
                         <span className="text-gray-400 text-xs w-20">Lokasi</span>
                         <span className="font-medium">{cfg.lokasi || '—'}</span>
                       </div>
+                      {cfg.ruang_default && (
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <span className="text-gray-400 text-xs w-20">Ruang Default</span>
+                          <span className="font-medium">{cfg.ruang_default}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 text-gray-600">
                         <span className="text-gray-400 text-xs w-20">Angkatan</span>
                         <span className="font-medium">{cfg.nama_angkatan || 'Semua Siswa'}</span>
@@ -249,7 +255,7 @@ export function KartuUjianPage({ showToast }: { showToast:(msg:string,type?:any)
                         className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors">
                         <Printer className="w-4 h-4"/> Cetak Kartu
                       </button>
-                      <button onClick={()=>setModal({open:true,mode:'edit',form:{...cfg,angkatan_id:cfg.angkatan_id||''}})}
+                      <button onClick={()=>setModal({open:true,mode:'edit',form:{...cfg,angkatan_id:cfg.angkatan_id||'',ruang_default:cfg.ruang_default||''}})}
                         className="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50">
                         <Pencil className="w-4 h-4 text-gray-500"/>
                       </button>
@@ -281,6 +287,7 @@ export function KartuUjianPage({ showToast }: { showToast:(msg:string,type?:any)
             <Input label="Tanggal Selesai" value={modal.form.tgl_selesai} onChange={v=>setModal(m=>({...m,form:{...m.form,tgl_selesai:v}}))} type="date"/>
           </div>
           <Input label="Lokasi / Ruangan" value={modal.form.lokasi} onChange={v=>setModal(m=>({...m,form:{...m.form,lokasi:v}}))} placeholder="Aula, Kelas VII A, dst"/>
+          <Input label="Ruang Default (berlaku untuk semua peserta jika tidak diisi manual)" value={modal.form.ruang_default||''} onChange={v=>setModal(m=>({...m,form:{...m.form,ruang_default:v}}))} placeholder="Ruang 1, Aula, Lab IPA..."/>
           <Select label="Angkatan (opsional — kosong = semua siswa)" value={String(modal.form.angkatan_id||'')} onChange={v=>setModal(m=>({...m,form:{...m.form,angkatan_id:v}}))} options={angkatanOpt}/>
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Keterangan</label>
