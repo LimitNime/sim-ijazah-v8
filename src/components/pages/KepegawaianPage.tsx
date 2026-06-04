@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Pencil, Trash2, Eye, X, Save, RefreshCw, ChevronLeft } from 'lucide-react'
-import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge } from '../ui'
+import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge, TextInput, DropDown } from '../ui'
 import { guruApi, absensiGuruApi, jamMengajarApi, skTugasApi, pdfCetakApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
@@ -106,7 +106,7 @@ function TabDataGuru({ showToast }: any) {
 
   const set = (k: string, v: any) => setModal(m => ({ ...m, form: { ...m.form, [k]: v } }))
   const F = ({ label, k, type = 'text', placeholder = '' }: any) => (
-    <Input label={label} value={modal.form[k] || ''} onChange={v => set(k, v)} type={type} placeholder={placeholder} />
+    <TextInput label={label} value={modal.form[k] || ''} onChange={v => set(k, v)} type={type} placeholder={placeholder} />
   )
 
   return (
@@ -170,8 +170,8 @@ function TabDataGuru({ showToast }: any) {
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-3">Identitas</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2"><F label="Nama Lengkap *" k="nama" /></div>
-              <Select label="Jenis Kelamin" value={modal.form.jk || 'L'} onChange={v => set('jk', v)} options={JK_OPT} />
-              <Select label="Agama" value={modal.form.agama || 'Islam'} onChange={v => set('agama', v)} options={AGAMA_OPT} />
+              <DropDown label="Jenis Kelamin" value={modal.form.jk || 'L'} onChange={v => set('jk', v)} options={JK_OPT} />
+              <DropDown label="Agama" value={modal.form.agama || 'Islam'} onChange={v => set('agama', v)} options={AGAMA_OPT} />
               <F label="Tempat Lahir" k="tempat_lahir" />
               <F label="Tanggal Lahir" k="tgl_lahir" type="date" />
             </div>
@@ -180,7 +180,7 @@ function TabDataGuru({ showToast }: any) {
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-3">Kepegawaian</p>
             <div className="grid grid-cols-2 gap-3">
               <F label="NIP" k="nip" placeholder="19xxxxxx" />
-              <Select label="Status Kepegawaian" value={modal.form.status_kepegawaian || 'PNS'} onChange={v => set('status_kepegawaian', v)} options={STATUS_KEPEG_OPT} />
+              <DropDown label="Status Kepegawaian" value={modal.form.status_kepegawaian || 'PNS'} onChange={v => set('status_kepegawaian', v)} options={STATUS_KEPEG_OPT} />
               <F label="Golongan" k="golongan" placeholder="III/a" />
               <F label="Jabatan" k="jabatan" placeholder="Guru" />
               <F label="Mata Pelajaran" k="mapel" placeholder="Matematika" />
@@ -432,10 +432,10 @@ function TabJamMengajar({ showToast }: any) {
       <Modal open={modal.open} title="Jam Mengajar" onClose={() => setModal(m => ({ ...m, open: false }))}
         footer={<><Button variant="ghost" onClick={() => setModal(m => ({ ...m, open: false }))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Select label="Guru *" value={String(modal.form.guru_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, guru_id: Number(v) } }))} options={guruOpt} />
-          <Input label="Mata Pelajaran" value={modal.form.mapel || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, mapel: v } }))} placeholder="Matematika" />
-          <Input label="Kelas" value={modal.form.kelas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, kelas: v } }))} placeholder="VII A, VII B, VIII A..." />
-          <Input label="Jumlah Jam/Minggu" value={String(modal.form.jumlah_jam || 1)} onChange={v => setModal(m => ({ ...m, form: { ...m.form, jumlah_jam: Number(v) } }))} type="number" />
+          <DropDown label="Guru *" value={String(modal.form.guru_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, guru_id: Number(v) } }))} options={guruOpt} />
+          <TextInput label="Mata Pelajaran" value={modal.form.mapel || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, mapel: v } }))} placeholder="Matematika" />
+          <TextInput label="Kelas" value={modal.form.kelas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, kelas: v } }))} placeholder="VII A, VII B, VIII A..." />
+          <TextInput label="Jumlah Jam/Minggu" value={String(modal.form.jumlah_jam || 1)} onChange={v => setModal(m => ({ ...m, form: { ...m.form, jumlah_jam: Number(v) } }))} type="number" />
         </div>
       </Modal>
       <ConfirmDialog open={confirm.open} title="Hapus Data" message="Hapus data jam mengajar ini?" danger onConfirm={handleDelete} onCancel={() => setConfirm({ open: false, id: null })} />
@@ -516,13 +516,13 @@ function TabSKTugas({ showToast }: any) {
       <Modal open={modal.open} title="SK Tugas Tambahan" onClose={() => setModal(m => ({ ...m, open: false }))}
         footer={<><Button variant="ghost" onClick={() => setModal(m => ({ ...m, open: false }))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
-          <Select label="Guru *" value={String(modal.form.guru_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, guru_id: Number(v) } }))} options={guruOpt} />
-          <Select label="Jenis Tugas" value={modal.form.jenis_tugas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, jenis_tugas: v } }))} options={tugasOpt} />
-          <Input label="Kelas (jika wali kelas)" value={modal.form.kelas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, kelas: v } }))} placeholder="VII A" />
-          <Input label="Nomor SK" value={modal.form.no_sk || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, no_sk: v } }))} />
-          <Input label="Tanggal SK" value={modal.form.tgl_sk || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, tgl_sk: v } }))} type="date" />
-          <Input label="Tahun Ajaran" value={modal.form.tahun_ajaran || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, tahun_ajaran: v } }))} placeholder="2024/2025" />
-          <Input label="Keterangan" value={modal.form.keterangan || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, keterangan: v } }))} />
+          <DropDown label="Guru *" value={String(modal.form.guru_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, guru_id: Number(v) } }))} options={guruOpt} />
+          <DropDown label="Jenis Tugas" value={modal.form.jenis_tugas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, jenis_tugas: v } }))} options={tugasOpt} />
+          <TextInput label="Kelas (jika wali kelas)" value={modal.form.kelas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, kelas: v } }))} placeholder="VII A" />
+          <TextInput label="Nomor SK" value={modal.form.no_sk || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, no_sk: v } }))} />
+          <TextInput label="Tanggal SK" value={modal.form.tgl_sk || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, tgl_sk: v } }))} type="date" />
+          <TextInput label="Tahun Ajaran" value={modal.form.tahun_ajaran || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, tahun_ajaran: v } }))} placeholder="2024/2025" />
+          <TextInput label="Keterangan" value={modal.form.keterangan || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, keterangan: v } }))} />
         </div>
       </Modal>
       <ConfirmDialog open={confirm.open} title="Hapus SK Tugas" message="Hapus SK tugas ini?" danger onConfirm={handleDelete} onCancel={() => setConfirm({ open: false, id: null })} />
