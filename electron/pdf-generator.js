@@ -1942,6 +1942,8 @@ module.exports = {
   generateSurat,
   generateKartuUjian,
   generateRekapBOS,
+  generateRaportSiswa,
+  generateRaportAll,
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -3059,6 +3061,308 @@ function generateRekapBOS(outputPath, { sekolah: s, items, tahun, semester, juml
   if (s.ttd_kepsek) { try { doc.image(s.ttd_kepsek, ttdX + 65, y + 18, { fit: [50, 30] }) } catch {} }
   doc.font(f.B).fontSize(8.5).text(s.kepala || '____________________', ttdX, y + 55, { width: 180, align: 'center' })
   doc.font(f.R).fontSize(7.5).text(`NIP. ${s.nip || '____________________'}`, ttdX, y + 65, { width: 180, align: 'center' })
+
+  doc.end()
+  return fn
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  RAPORT SISWA — PDF format resmi A4 portrait
+//  Satu halaman per siswa (atau 2 halaman jika mapel banyak)
+// ══════════════════════════════════════════════════════════════════════════
+
+function buildRaportPage(doc, f, s, periode, siswa, rsSiswa, mapelList, nilaiMap) {
+  const PW = 595.28, PH = 841.89
+  const ml = 45, mr = 45, mt = 20, cw = PW - ml - mr
+
+  // ── KOP ──────────────────────────────────────────────────────────────────
+  let y = drawKopResmi(doc, s, ml, cw)
+
+  // ── JUDUL ─────────────────────────────────────────────────────────────────
+  doc.rect(ml, y, cw, 22).fill('#1e3a5f')
+  doc.font(f.B).fontSize(11).fillColor('#fff')
+     .text('LAPORAN HASIL BELAJAR SISWA (RAPORT)', ml, y + 5, { width: cw, align: 'center' })
+  y += 26
+
+  doc.font(f.R).fontSize(9).fillColor('#555')
+     .text(`Semester ${periode.semester}  |  Tahun Pelajaran ${periode.tahun_ajaran}`, ml, y, { width: cw, align: 'center' })
+  y += 14
+
+  // ── IDENTITAS SISWA ────────────────────────────────────────────────────────
+  const identY = y
+  const halfW  = cw / 2 - 5
+
+  const drawId = (label, value, x, yy, lw) => {
+    doc.font(f.R).fontSize(8).fillColor('#555').text(label, x, yy, { width: lw })
+    doc.font(f.R).fontSize(8).fillColor('#000').text(':', x + lw, yy, { width: 8 })
+    doc.font(f.B).fontSize(8.5).fillColor('#000').text(value || '—', x + lw + 8, yy, { width: halfW - lw - 8 })
+    doc.moveTo(x + lw + 8, yy + 10).lineTo(x + halfW, yy + 10).lineWidth(0.3).stroke('#ddd')
+  }
+
+  const LW = 72
+  let iy = identY
+  const kiri = [
+    ['Nama Lengkap', siswa.nama],
+    ['NIS / NISM',   siswa.nism || '-'],
+    ['NISN',         siswa.nisn || '-'],
+    ['Tempat Lahir', siswa.tempat_lahir || '-'],
+    ['Tanggal Lahir', siswa.tgl_lahir ? fmtTgl(siswa.tgl_lahir) : '-'],
+    ['Agama',         siswa.agama || '-'],
+  ]
+  const kanan = [
+    ['Kelas',         rsSiswa?.kelas || siswa.kelas || '-'],
+    ['No. Absen',     rsSiswa?.no_absen ? String(rsSiswa.no_absen) : '-'],
+    ['Nama Orang Tua', siswa.nama_ayah || siswa.nama_ibu || '-'],
+    ['Alamat',         siswa.alamat || '-'],
+    ['Tahun Pelajaran', periode.tahun_ajaran],
+    ['Wali Kelas',     rsSiswa?.catatan_wali ? '' : '-'],
+  ]
+
+  kiri.forEach(([l, v]) => { drawId(l, v, ml, iy, LW); iy += 12 })
+  iy = identY
+  kanan.forEach(([l, v]) => { drawId(l, v, ml + halfW + 10, iy, LW); iy += 12 })
+
+  y = identY + kiri.length * 12 + 4
+
+  // ── TABEL NILAI ────────────────────────────────────────────────────────────
+  // Pisah mapel per kelompok
+  const kelompokMap = {}
+  for (const m of mapelList) {
+    const k = m.kelompok || 'A'
+    if (!kelompokMap[k]) kelompokMap[k] = []
+    kelompokMap[k].push(m)
+  }
+
+  const KELOMPOK_LABEL = {
+    'A': 'KELOMPOK A — Muatan Nasional',
+    'B': 'KELOMPOK B — Muatan Kewilayahan',
+    'C': 'KELOMPOK C — Muatan Peminatan',
+    'Mulok': 'MUATAN LOKAL',
+    'Pengembangan Diri': 'PENGEMBANGAN DIRI',
+  }
+
+  // Kolom tabel: No | Mata Pelajaran | UH1..n | Avg UH | UTS | PAS | Nilai Akhir | Predikat | Ket
+  // Lebar disesuaikan
+  const NO_W   = 22
+  const MP_W   = 120
+  const UH_W   = 28   // per kolom UH (max 6)
+  const AVG_W  = 30
+  const UTS_W  = 30
+  const PAS_W  = 30
+  const NA_W   = 38
+  const PR_W   = 28
+  const DESC_W = cw - NO_W - MP_W - AVG_W - UTS_W - PAS_W - NA_W - PR_W
+  const ROW_H  = 14
+  const HDR_H  = 18
+
+  // Count max bab across all mapel
+  const maxBab = mapelList.reduce((mx, m) => Math.max(mx, m.jumlah_bab || 1), 1)
+  const totalUhW = UH_W * maxBab
+
+  // Recalculate with actual UH columns
+  const actualDesc = cw - NO_W - MP_W - totalUhW - AVG_W - UTS_W - PAS_W - NA_W - PR_W
+  const descW = Math.max(actualDesc, 40)
+
+  const COLS = [
+    { h: 'No', w: NO_W, align: 'center' },
+    { h: 'Mata Pelajaran', w: MP_W, align: 'left' },
+    ...Array.from({length: maxBab}, (_, i) => ({ h: `UH${i+1}`, w: UH_W, align: 'center' })),
+    { h: 'Avg UH', w: AVG_W, align: 'center' },
+    { h: 'UTS', w: UTS_W, align: 'center' },
+    { h: 'PAS', w: PAS_W, align: 'center' },
+    { h: 'NA', w: NA_W, align: 'center' },
+    { h: 'Pred', w: PR_W, align: 'center' },
+    { h: 'Deskripsi / Catatan', w: descW, align: 'left' },
+  ]
+  const tableW = COLS.reduce((a, c) => a + c.w, 0)
+  const sx = ml
+
+  const drawTableHeader = () => {
+    doc.rect(sx, y, tableW, HDR_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+    let hx = sx
+    COLS.forEach(c => {
+      doc.font(f.B).fontSize(6).fillColor('#fff')
+         .text(c.h, hx + 1, y + 5, { width: c.w - 2, align: c.align })
+      hx += c.w
+    })
+    y += HDR_H
+  }
+
+  const PREDIKAT_BG = { A:'#dcfce7', 'B+':'#dbeafe', B:'#e0f2fe', 'C+':'#fef9c3', C:'#ffedd5', D:'#fee2e2' }
+
+  const drawMapelRow = (m, idx, isLast) => {
+    if (y + ROW_H > PH - 60) return false  // need new page
+    const n    = nilaiMap[m.id]
+    const bg   = idx % 2 === 0 ? '#f9fafb' : '#fff'
+    doc.rect(sx, y, tableW, ROW_H).fillAndStroke(bg, '#d1d5db')
+
+    // Hitung avg UH
+    const uhs = Array.from({length: maxBab}, (_, i) => n?.[`uh${i+1}`]).filter(v => v != null)
+    const avgUH = uhs.length ? Math.round(uhs.reduce((a, b) => a + b, 0) / uhs.length * 10) / 10 : null
+    const na = n?.nilai_akhir ?? null
+    const pr = n?.predikat ?? ''
+
+    const vals = [
+      String(idx + 1),
+      m.nama,
+      ...Array.from({length: maxBab}, (_, i) => n?.[`uh${i+1}`] != null ? String(n[`uh${i+1}`]) : '—'),
+      avgUH != null ? String(avgUH) : '—',
+      n?.uts != null ? String(n.uts) : '—',
+      n?.pas != null ? String(n.pas) : '—',
+      na != null ? String(na) : '—',
+      pr || '—',
+      n?.deskripsi || '',
+    ]
+
+    let rx = sx
+    vals.forEach((v, ci) => {
+      const col    = COLS[ci]
+      const isBold = ci === 1 || ci === vals.length - 3
+      const naCol  = ci === vals.length - 3 && na != null ? (na < m.kkm ? '#dc2626' : '#15803d') : '#111'
+
+      // Predikat background
+      if (ci === vals.length - 2 && pr && PREDIKAT_BG[pr]) {
+        doc.rect(rx + 1, y + 1, col.w - 2, ROW_H - 2).fill(PREDIKAT_BG[pr])
+      }
+
+      doc.font(isBold ? f.B : f.R).fontSize(6.5).fillColor(naCol)
+         .text(v, rx + 1, y + 4, { width: col.w - 2, align: col.align, ellipsis: true })
+      rx += col.w
+    })
+    y += ROW_H
+    return true
+  }
+
+  let mapelIdx = 0
+  const kelompokKeys = Object.keys(kelompokMap).sort()
+
+  for (const kel of kelompokKeys) {
+    if (y + HDR_H + 20 > PH - 60) break  // overflow protection
+
+    const label = KELOMPOK_LABEL[kel] || `Kelompok ${kel}`
+
+    // Kelompok label row
+    doc.rect(sx, y, tableW, 14).fillAndStroke('#f0f4ff', '#d1d5db')
+    doc.font(f.B).fontSize(7).fillColor('#1e3a5f')
+       .text(label, sx + 4, y + 3, { width: tableW - 8 })
+    y += 14
+
+    // Sub-header only on first kelompok or after new page
+    drawTableHeader()
+
+    kelompokMap[kel].forEach((m, i) => drawMapelRow(m, mapelIdx++, false))
+  }
+
+  // ── REKAP KEHADIRAN ────────────────────────────────────────────────────────
+  y += 6
+  if (y + 50 > PH - 80) { /* skip if no space */ } else {
+    const hadir = rsSiswa?.hadir || 0
+    const sakit = rsSiswa?.sakit || 0
+    const izin  = rsSiswa?.izin  || 0
+    const alpha = rsSiswa?.alpha || 0
+    const hariEfektif = periode.jumlah_hari_efektif || 0
+    const pct = hariEfektif > 0 ? Math.round((hadir / hariEfektif) * 100) : 0
+
+    doc.font(f.B).fontSize(8).fillColor('#1e3a5f').text('REKAP KEHADIRAN', sx, y)
+    y += 12
+    doc.rect(sx, y, tableW, 16).fillAndStroke('#1e3a5f', '#1e3a5f')
+    const hdCols = [['Hari Efektif', 70], ['Hadir', 50], ['Sakit', 50], ['Izin', 50], ['Alpha', 50], ['% Kehadiran', 70]]
+    let hx = sx
+    hdCols.forEach(([h, w]) => {
+      doc.font(f.B).fontSize(7).fillColor('#fff').text(h, hx + 2, y + 4, { width: w - 4, align: 'center' })
+      hx += w
+    })
+    y += 16
+    doc.rect(sx, y, tableW, 16).fillAndStroke('#f9fafb', '#d1d5db')
+    let dx = sx
+    ;[String(hariEfektif), String(hadir), String(sakit), String(izin), String(alpha), `${pct}%`].forEach((v, i) => {
+      const w = hdCols[i][1]
+      const color = i === 5 ? (pct >= 80 ? '#15803d' : '#dc2626') : '#111'
+      doc.font(f.B).fontSize(9).fillColor(color).text(v, dx + 2, y + 4, { width: w - 4, align: 'center' })
+      dx += w
+    })
+    y += 20
+  }
+
+  // ── CATATAN WALI KELAS ─────────────────────────────────────────────────────
+  if (rsSiswa?.catatan_wali) {
+    y += 4
+    doc.font(f.B).fontSize(8).fillColor('#333').text('Catatan Wali Kelas:', sx, y)
+    doc.font(f.R).fontSize(8).fillColor('#000').text(rsSiswa.catatan_wali, sx + 85, y, { width: cw - 85 })
+    y += 14
+  }
+
+  // ── TTD ────────────────────────────────────────────────────────────────────
+  const ttdY = Math.max(y + 10, PH - 100)
+  const col1X = ml
+  const col3X = ml + cw - 170
+  const col2X = ml + (cw - 170) / 2 - 40
+
+  // Kol 1: Orang tua/wali
+  doc.font(f.R).fontSize(8).fillColor('#000')
+     .text('Orang Tua / Wali,', col1X, ttdY, { width: 160, align: 'center' })
+  doc.font(f.R).fontSize(8).text(`${s.kota || '________'}, ${fmtTgl(new Date().toISOString().slice(0,10))}`, col2X, ttdY, { width: 160, align: 'center' })
+  doc.font(f.R).fontSize(8).text(`${s.kota || '________'}, ${fmtTgl(new Date().toISOString().slice(0,10))}`, col3X, ttdY, { width: 170, align: 'center' })
+
+  doc.font(f.R).fontSize(8)
+     .text('Wali Kelas,', col2X, ttdY + 12, { width: 160, align: 'center' })
+     .text('Kepala Sekolah,', col3X, ttdY + 12, { width: 170, align: 'center' })
+
+  // TTD kepala sekolah
+  if (s.ttd_kepsek) {
+    try {
+      const fs = require('fs')
+      doc.image(s.ttd_kepsek, col3X + 55, ttdY + 20, { fit: [60, 30] })
+    } catch {}
+  }
+
+  doc.font(f.B).fontSize(8)
+     .text('____________________', col1X, ttdY + 52, { width: 160, align: 'center' })
+     .text('____________________', col2X, ttdY + 52, { width: 160, align: 'center' })
+     .text((s.kepala || '____________________').toUpperCase(), col3X, ttdY + 52, { width: 170, align: 'center' })
+
+  doc.font(f.R).fontSize(7)
+     .text(`NIP. ${s.nip || '____________________'}`, col3X, ttdY + 63, { width: 170, align: 'center' })
+}
+
+// ─── Single siswa ──────────────────────────────────────────────────────────
+function generateRaportSiswa(outputPath, { sekolah, periode, siswa, rsSiswa, mapelList, nilaiMap }) {
+  const PDFDocument = require('pdfkit')
+  const fs          = require('fs')
+  const path        = require('path')
+  const doc = new PDFDocument({ size: [595.28, 841.89], margins: { top: 20, bottom: 30, left: 45, right: 45 }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `raport_${siswa.nama?.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') || siswa.id}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f   = fontSetup(doc, sekolah)
+  doc.addPage()
+  buildRaportPage(doc, f, sekolah, periode, siswa, rsSiswa, mapelList, nilaiMap)
+  doc.end()
+  return fn
+}
+
+// ─── All siswa dalam satu PDF ─────────────────────────────────────────────
+function generateRaportAll(outputPath, { sekolah, periode, siswaList, mapelList, nilaiAll, rsAll }) {
+  const PDFDocument = require('pdfkit')
+  const fs          = require('fs')
+  const path        = require('path')
+  const doc = new PDFDocument({ size: [595.28, 841.89], margins: { top: 20, bottom: 30, left: 45, right: 45 }, autoFirstPage: false })
+  const fn  = path.join(outputPath, `raport_semua_${periode.label?.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') || periode.id}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f   = fontSetup(doc, sekolah)
+
+  const nilaiMap = {}
+  for (const n of nilaiAll) {
+    if (!nilaiMap[n.siswa_id]) nilaiMap[n.siswa_id] = {}
+    nilaiMap[n.siswa_id][n.mapel_id] = n
+  }
+  const rsMap = {}
+  for (const rs of rsAll) rsMap[rs.siswa_id] = rs
+
+  for (const siswa of siswaList) {
+    doc.addPage()
+    buildRaportPage(doc, f, sekolah, periode, siswa, rsMap[siswa.id] || null, mapelList, nilaiMap[siswa.id] || {})
+  }
 
   doc.end()
   return fn
