@@ -564,7 +564,7 @@ function generateSKL(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
     doc.moveTo(garisX, y).lineTo(garisX + garisW, y).lineWidth(0.7).stroke('#000')
     if (namaKepalaSkl) {
       doc.font(_fBold).fontSize(9.5)
-        .text(namaKepalaSkl, ttdX, y - 15, { width: ttdW, align: 'center', underline: true })
+        .text(namaKepalaSkl, ttdX, y - 15, { width: ttdW, align: 'center' })
     }
     y += 4
     doc.font(_fReg).fontSize(9)
@@ -756,7 +756,7 @@ function generateNilaiIjazah(outputPath, { sekolah: s, siswaList, mapelList, nil
     doc.moveTo(garisXni, y).lineTo(garisXni+garisWni, y).lineWidth(0.7).stroke('#000')
     if (namaKepalaNi) {
       doc.font(fB).fontSize(9.5)
-        .text(namaKepalaNi, ttdX, y-15, { width: ttdW, align: 'center', underline: true })
+        .text(namaKepalaNi, ttdX, y-15, { width: ttdW, align: 'center' })
     }
     y += 5
     doc.font(fR).fontSize(9)
@@ -938,7 +938,7 @@ function generateDKN(outputPath, { sekolah: s, siswaList, mapelList, nilaiData, 
   doc.moveTo(garisXdkn, y).lineTo(garisXdkn + garisWdkn, y).lineWidth(0.7).stroke('#000')
   if (namaKepalaDkn) {
     doc.font(fB).fontSize(9.5)
-      .text(namaKepalaDkn, ttdX, y - 16, { width: ttdW, align: 'center', underline: true })
+      .text(namaKepalaDkn, ttdX, y - 16, { width: ttdW, align: 'center' })
   }
   y += 6
   doc.font(fR).fontSize(9)
@@ -1356,7 +1356,7 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
     const namaTTDy = fotoY + fotoH - 16
     if (s.kepala) {
       doc.font(fB).fontSize(9.5)
-        .text(s.kepala, ttdX, namaTTDy - 13, { width: ttdW, align: 'center', underline: true })
+        .text(s.kepala, ttdX, namaTTDy - 13, { width: ttdW, align: 'center' })
       // Garis bawah nama — panjang dinamis
       const namaW = Math.min(doc.widthOfString(s.kepala, { font:'Helvetica-Bold', fontSize:9.5 }) + 10, ttdW - 10)
       const namaX = ttdX + (ttdW - namaW) / 2
@@ -1431,7 +1431,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     y += 16
     doc.font(fR).fontSize(9.5)
       .text(`Nomor: ${s.no_transkrip || '...................................'}`, ml, y, { width: cw, align: 'center' })
-    y += 18
+    y += 26
 
     // ════════════════════════════════════════════════════════════════════
     // BIODATA — 8 baris
@@ -1445,7 +1445,6 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
       doc.font(fR).fontSize(9.5).fillColor('#000')
         .text(label, lx, y, { width: 144, lineBreak: false })
         .text(':', sepX, y, { width: 6, lineBreak: false })
-      dotLine(valX, y + 11, valW)
       if (value) doc.text(value, valX + 2, y, { width: valW - 4, lineBreak: false })
       y += 14
     }
@@ -1458,7 +1457,6 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     bioRow('Nomor Induk Siswa Nasional',   siswa.nisn || '')
     bioRow('Nomor Ijazah',                 siswa.blanko || '')
     bioRow('Tanggal Kelulusan',            fmtTgl(s.tgl_lulus))
-    bioRow('Jenis Kekhususan',             s.jenis_kekhususan || '')
     y += 8
 
     // ════════════════════════════════════════════════════════════════════
@@ -1547,7 +1545,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     doc.font(fR).fontSize(9.5).fillColor('#000')
       .text(`${s.kota || ''}, ${tglSk}`, ttdX, y, { width: ttdW, align: 'center' })
     y += 14
-    doc.text('Kepala,', ttdX, y, { width: ttdW, align: 'center' })
+    doc.text('Kepala Sekolah,', ttdX, y, { width: ttdW, align: 'center' })
     y += 85   // 3cm ruang tanda tangan
 
     const namaKepalaTr = s.kepala ? s.kepala.toUpperCase() : ''
@@ -1556,7 +1554,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     doc.moveTo(garisXtr, y).lineTo(garisXtr + garisWtr, y).lineWidth(0.7).stroke('#000')
     if (namaKepalaTr) {
       doc.font(fB).fontSize(9.5)
-        .text(namaKepalaTr, ttdX, y - 15, { width: ttdW, align: 'center', underline: true })
+        .text(namaKepalaTr, ttdX, y - 15, { width: ttdW, align: 'center' })
     }
     y += 5
     doc.font(fR).fontSize(9.5)
@@ -1712,7 +1710,7 @@ function generateSKKelulusan(outputPath, { sekolah: s, siswaList }) {
   doc.moveTo(garisXsk, y).lineTo(garisXsk + garisWsk, y).lineWidth(0.7).stroke('#000')
   if (namaKepalaSk) {
     doc.font(fB).fontSize(9.5)
-      .text(namaKepalaSk, ttdX, y - 15, { width: ttdW, align: 'center', underline: true })
+      .text(namaKepalaSk, ttdX, y - 15, { width: ttdW, align: 'center' })
   }
   y += 5
   doc.font(fR).fontSize(9)
@@ -1909,7 +1907,7 @@ function generateSKKB(outputPath, { sekolah: s, siswaList }) {
     doc.moveTo(garisXSkkb, y).lineTo(garisXSkkb + garisWSkkb, y).lineWidth(0.7).stroke('#000')
     if (namaKepalaSkkb) {
       doc.font(fB).fontSize(10.5)
-        .text(namaKepalaSkkb, ttdX, y - 15, { width: ttdW, align: 'center', underline: true })
+        .text(namaKepalaSkkb, ttdX, y - 15, { width: ttdW, align: 'center' })
       y += 13
     }
     if (s.nip) {
