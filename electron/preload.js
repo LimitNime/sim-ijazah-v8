@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('api', {
     delete:          id      => invoke('siswa:delete',id),
     generateNoSkl:   opts    => invoke('siswa:generate_no_skl', opts),
     updateNoSkl:     (id,v)  => invoke('siswa:update_no_skl', id, v),
+    generateNoTranskrip: opts => invoke('siswa:generate_no_transkrip', opts),
+    updateNoTranskrip:   (id,v) => invoke('siswa:update_no_transkrip', id, v),
     uploadFoto:      id      => invoke('siswa:upload_foto', id),
     removeFoto:      id      => invoke('siswa:remove_foto', id),
     importExcel:     ()      => invoke('siswa:import_excel'),
