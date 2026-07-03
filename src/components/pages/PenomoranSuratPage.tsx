@@ -11,6 +11,7 @@ const JENIS_SURAT = [
     field: 'no_sk',
     keterangan: 'Dipakai di dokumen SK Kelulusan (bagian NOMOR)',
     contoh: '420/SK-LLS/001/V/2025',
+    polaDefault: '420/SK-LLS/{no_urut}/{bulan}/{tahun}',
     icon: '📋',
   },
   {
@@ -19,6 +20,7 @@ const JENIS_SURAT = [
     field: 'no_sk_dkn',
     keterangan: 'Dipakai di header DKN sebagai nomor referensi',
     contoh: '420/DKN/001/V/2025',
+    polaDefault: '420/DKN/{no_urut}/{bulan}/{tahun}',
     icon: '📊',
   },
   {
@@ -27,6 +29,7 @@ const JENIS_SURAT = [
     field: 'no_skkb',
     keterangan: 'Dipakai sebagai fallback jika siswa tidak punya No SKKB individual',
     contoh: '421/SKKB/001/V/2025',
+    polaDefault: '421/SKKB/{no_urut}/{bulan}/{tahun}',
     icon: '📄',
   },
   {
@@ -35,6 +38,7 @@ const JENIS_SURAT = [
     field: 'no_nilai_ijazah',
     keterangan: 'Muncul di header dokumen Daftar Nilai Ijazah.',
     contoh: '421.2/NIJ/001/V/2025',
+    polaDefault: '421.2/NIJ/{no_urut}/{bulan}/{tahun}',
     info: 'Muncul di header dokumen Nilai Ijazah per siswa.',
     icon: '📝',
   },
@@ -44,6 +48,7 @@ const JENIS_SURAT = [
     field: 'no_transkrip',
     keterangan: 'Muncul di baris "Nomor:" pada header Transkrip Nilai.',
     contoh: '421.2/TRN/001/V/2025',
+    polaDefault: '421.2/TRN/{no_urut}/{bulan}/{tahun}',
     info: 'Muncul di baris "Nomor:" pada header dokumen Transkrip Nilai per siswa.',
     icon: '📋',
   },
@@ -52,20 +57,14 @@ const JENIS_SURAT = [
 const BULAN_ROMAWI = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
 
 interface FormatState {
-  kode_satuan: string
-  kode_jenis: string
+  pola: string
   nomor_urut: string
-  bulan: string
-  tahun: string
 }
 
-const DEFAULT_FORMAT: FormatState = {
-  kode_satuan: '',
-  kode_jenis: '',
-  nomor_urut: '001',
-  bulan: BULAN_ROMAWI[new Date().getMonth()],
-  tahun: String(new Date().getFullYear()),
-}
+const makeDefaultFormat = (jenis: typeof JENIS_SURAT[0]): FormatState => ({
+  pola: jenis.polaDefault,
+  nomor_urut: '1',
+})
 
 export function PenomoranSuratPage({ showToast }: { showToast: (msg: string, type?: any) => void }) {
   const [data, setData]       = useState<Record<string, string>>({})
@@ -74,7 +73,7 @@ export function PenomoranSuratPage({ showToast }: { showToast: (msg: string, typ
 
   // State format generator per jenis surat
   const [formats, setFormats] = useState<Record<string, FormatState>>(
-    Object.fromEntries(JENIS_SURAT.map(j => [j.key, { ...DEFAULT_FORMAT, kode_jenis: j.key.replace('_','-').toUpperCase() }]))
+    Object.fromEntries(JENIS_SURAT.map(j => [j.key, makeDefaultFormat(j)]))
   )
   const [activeGen, setActiveGen] = useState<string | null>(null)
 
@@ -95,8 +94,13 @@ export function PenomoranSuratPage({ showToast }: { showToast: (msg: string, typ
 
   const generateNomor = (key: string) => {
     const fmt = formats[key]
-    const no = fmt.nomor_urut.padStart(3, '0')
-    return `${fmt.kode_satuan}/${fmt.kode_jenis}/${no}/${fmt.bulan}/${fmt.tahun}`
+    const no    = String(parseInt(fmt.nomor_urut) || 1).padStart(3, '0')
+    const bulan = BULAN_ROMAWI[new Date().getMonth()]
+    const tahun = String(new Date().getFullYear())
+    return (fmt.pola || '')
+      .replace(/{no_urut}/g, no)
+      .replace(/{bulan}/g, bulan)
+      .replace(/{tahun}/g, tahun)
   }
 
   const applyGenerated = (jenis: typeof JENIS_SURAT[0]) => {
@@ -210,67 +214,44 @@ export function PenomoranSuratPage({ showToast }: { showToast: (msg: string, typ
                 <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-3">
                   Generator Nomor Otomatis
                 </p>
-                <div className="grid grid-cols-5 gap-3 mb-3">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                      Kode Satuan
-                    </label>
-                    <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formats[jenis.key].kode_satuan}
-                      onChange={e => setFmt(jenis.key, 'kode_satuan', e.target.value.toUpperCase())}
-                      placeholder="420"
-                    />
+
+                {/* Info variabel */}
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800 mb-3">
+                  <p className="font-semibold mb-1.5">Variabel yang bisa dipakai dalam pola:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['{no_urut}','{bulan}','{tahun}'].map(v => (
+                      <code key={v} className="bg-white border border-blue-200 px-2 py-0.5 rounded font-mono">{v}</code>
+                    ))}
                   </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                      Kode Jenis Surat
-                    </label>
-                    <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formats[jenis.key].kode_jenis}
-                      onChange={e => setFmt(jenis.key, 'kode_jenis', e.target.value.toUpperCase())}
-                      placeholder="SK-LLS"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                      No Urut
-                    </label>
-                    <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formats[jenis.key].nomor_urut}
-                      onChange={e => setFmt(jenis.key, 'nomor_urut', e.target.value)}
-                      placeholder="001"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                      Bulan
-                    </label>
-                    <select
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formats[jenis.key].bulan}
-                      onChange={e => setFmt(jenis.key, 'bulan', e.target.value)}
-                    >
-                      {BULAN_ROMAWI.map((b, i) => (
-                        <option key={b} value={b}>
-                          {b} — {['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'][i]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
-                      Tahun
-                    </label>
-                    <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formats[jenis.key].tahun}
-                      onChange={e => setFmt(jenis.key, 'tahun', e.target.value)}
-                      placeholder="2025"
-                    />
-                  </div>
+                  <p className="mt-2 text-blue-600">
+                    <strong>{'{bulan}'}</strong> = bulan romawi saat ini &nbsp;|&nbsp;
+                    <strong>{'{tahun}'}</strong> = tahun saat ini &nbsp;|&nbsp;
+                    <strong>{'{no_urut}'}</strong> = nomor urut 3 digit (001, 002, ...)
+                  </p>
+                </div>
+
+                {/* Pola bebas */}
+                <div className="flex flex-col gap-1 mb-3">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Pola Nomor {jenis.label}
+                  </label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    value={formats[jenis.key].pola}
+                    onChange={e => setFmt(jenis.key, 'pola', e.target.value)}
+                    placeholder={jenis.polaDefault}
+                  />
+                  <p className="text-xs text-gray-400">Ketik bebas — tambahkan slash, titik, atau teks apapun sesuai format nomor sekolah Anda</p>
+                </div>
+
+                <div className="mb-3 max-w-[200px]">
+                  <Input
+                    label="Nomor Urut"
+                    type="number" min="1"
+                    value={formats[jenis.key].nomor_urut}
+                    onChange={e => setFmt(jenis.key, 'nomor_urut', e.target.value)}
+                    placeholder="1"
+                  />
                 </div>
 
                 {/* Preview */}
@@ -288,9 +269,6 @@ export function PenomoranSuratPage({ showToast }: { showToast: (msg: string, typ
                     Pakai Nomor Ini →
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  Format: <span className="font-mono">Kode Satuan / Kode Jenis / No Urut / Bulan / Tahun</span>
-                </p>
               </div>
             )}
           </div>
