@@ -338,7 +338,8 @@ function initDB() {
     nama_ibu: 'TEXT', agama: "TEXT DEFAULT 'Islam'",
     kewarganegaraan: "TEXT DEFAULT 'Indonesia'",
     anak_ke: 'TEXT', asal_sekolah: 'TEXT', tahun_masuk: 'TEXT',
-    kelas: 'TEXT', no_hp_ortu: 'TEXT'
+    kelas: 'TEXT', no_hp_ortu: 'TEXT',
+    no_transkrip: 'TEXT'
   }
   Object.entries(newSiswaCols).forEach(([col, type]) => {
     if (!siswaCols.includes(col))
@@ -1671,6 +1672,38 @@ function registerIPC() {
 
   ipcMain.handle('siswa:update_no_skl', (_, id, no_skl) => {
     db.prepare('UPDATE siswa SET no_skl=? WHERE id=?').run(no_skl, id)
+    return true
+  })
+
+  // Generate No Transkrip otomatis — per siswa, sama seperti No SKL
+  ipcMain.handle('siswa:generate_no_transkrip', (_, { pola, mulai_dari }) => {
+    // pola: string bebas dengan variabel {no_urut}, {bulan}, {tahun}
+    // Contoh: "421.2/{no_urut}/TRN/{bulan}/{tahun}"
+    const BULAN_ROM = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+    const now = new Date()
+    const bulanDefault = BULAN_ROM[now.getMonth()]
+    const tahunDefault = String(now.getFullYear())
+    const polaParsed = (pola || '421.2/{no_urut}/TRN/{bulan}/{tahun}')
+      .replace(/{bulan}/g,  bulanDefault)
+      .replace(/{tahun}/g,  tahunDefault)
+
+    const siswaList = db.prepare('SELECT id, no_urut FROM siswa ORDER BY COALESCE(no_urut,99999), id ASC').all()
+    let nomor = parseInt(mulai_dari) || 1
+    const stmt = db.prepare('UPDATE siswa SET no_transkrip=? WHERE id=?')
+    const run = db.transaction(() => {
+      siswaList.forEach(s => {
+        const noUrut = String(nomor).padStart(3, '0')
+        const noTranskrip = polaParsed.replace(/{no_urut}/g, noUrut)
+        stmt.run(noTranskrip, s.id)
+        nomor++
+      })
+    })
+    run()
+    return { ok: true, generated: siswaList.length }
+  })
+
+  ipcMain.handle('siswa:update_no_transkrip', (_, id, no_transkrip) => {
+    db.prepare('UPDATE siswa SET no_transkrip=? WHERE id=?').run(no_transkrip, id)
     return true
   })
 
