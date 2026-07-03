@@ -322,7 +322,7 @@ function initDB() {
     pdf_margin_top: 'REAL', pdf_margin_bottom: 'REAL',
     pdf_ukuran: 'TEXT', kop_image: 'TEXT',
     judul_sk_kelulusan: 'TEXT', paragraf_pembuka_sk: 'TEXT', paragraf_penutup_sk: 'TEXT',
-    alamat2: 'TEXT', no_skkb: 'TEXT'
+    alamat2: 'TEXT', no_skkb: 'TEXT', tgl_ttd_kepsek: 'TEXT'
   }
   Object.entries(newSekolahCols).forEach(([col, type]) => {
     if (!sekolahCols.includes(col))
