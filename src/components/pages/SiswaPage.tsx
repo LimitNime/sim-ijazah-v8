@@ -16,7 +16,7 @@ const EMPTY: Omit<Siswa,'id'> = {
   tempat_lahir:'', tgl_lahir:'', ortu:'', nama_ibu:'',
   agama:'Islam', kewarganegaraan:'Indonesia', anak_ke:'',
   asal_sekolah:'', tahun_masuk:'', kelas:'', no_hp_ortu:'', alamat:'',
-  peserta_am:'', no_peserta:'', blanko:'', no_skl:'', no_skkb:'',
+  peserta_am:'', no_peserta:'', blanko:'', no_skl:'', no_skkb:'', no_transkrip:'',
   jenis_kekhususan:'', foto:'',
 }
 
@@ -41,6 +41,13 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
   const [genPreview, setGenPreview] = useState('')
   const [genLoading, setGenLoading] = useState(false)
   const [editSkl, setEditSkl]       = useState<{id:number, val:string} | null>(null)
+
+  // Generate No Transkrip
+  const [genTrModal, setGenTrModal]     = useState(false)
+  const [genTrOpts, setGenTrOpts]       = useState({ pola: '421.2/{no_urut}/TRN/{bulan}/{tahun}', mulai_dari: '1' })
+  const [genTrPreview, setGenTrPreview] = useState('')
+  const [genTrLoading, setGenTrLoading] = useState(false)
+  const [editTr, setEditTr]             = useState<{id:number, val:string} | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,6 +81,16 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
       .replace(/{no_urut}/g, no).replace(/{bulan}/g, bulan).replace(/{tahun}/g, tahun)
     setGenPreview(prev)
   }, [genOpts])
+
+  useEffect(() => {
+    const BULAN_ROM = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
+    const bulan = BULAN_ROM[new Date().getMonth()]
+    const tahun = String(new Date().getFullYear())
+    const no    = String(parseInt(genTrOpts.mulai_dari)||1).padStart(3,'0')
+    const prev  = (genTrOpts.pola || '421.2/{no_urut}/TRN/{bulan}/{tahun}')
+      .replace(/{no_urut}/g, no).replace(/{bulan}/g, bulan).replace(/{tahun}/g, tahun)
+    setGenTrPreview(prev)
+  }, [genTrOpts])
 
   const stats = {
     total: data.length,
@@ -135,6 +152,24 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
     await siswaApi.updateNoSkl(editSkl.id, editSkl.val)
     showToast('No SKL disimpan')
     setEditSkl(null)
+    load()
+  }
+
+  const handleGenerateTranskrip = async () => {
+    setGenTrLoading(true)
+    try {
+      const result = await siswaApi.generateNoTranskrip(genTrOpts) as any
+      if (result?.ok) { showToast(`No Transkrip berhasil digenerate untuk ${result.generated} siswa`); setGenTrModal(false); load() }
+      else showToast('Gagal generate No Transkrip','error')
+    } catch { showToast('Gagal generate No Transkrip','error') }
+    finally { setGenTrLoading(false) }
+  }
+
+  const handleSaveEditTr = async () => {
+    if (!editTr) return
+    await siswaApi.updateNoTranskrip(editTr.id, editTr.val)
+    showToast('No Transkrip disimpan')
+    setEditTr(null)
     load()
   }
 
@@ -208,6 +243,34 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
           </span>
         )
     },
+    { key:'no_transkrip', header:'No Transkrip', width:'200px',
+      render:(r:Siswa) => editTr?.id === r.id
+        ? (
+          <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
+            <input
+              autoFocus
+              className="flex-1 border border-purple-300 rounded px-2 py-0.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+              value={editTr.val}
+              onChange={e => setEditTr(s => s ? { ...s, val: e.target.value } : s)}
+              onKeyDown={e => { if (e.key==='Enter') handleSaveEditTr(); if (e.key==='Escape') setEditTr(null) }}
+            />
+            <button onClick={handleSaveEditTr} className="text-emerald-600 font-bold text-xs px-1 hover:text-emerald-700">✓</button>
+            <button onClick={() => setEditTr(null)} className="text-gray-400 text-xs px-1 hover:text-red-500">✕</button>
+          </div>
+        ) : (
+          <span
+            className="font-mono text-xs cursor-pointer group flex items-center gap-1"
+            title="Klik untuk edit"
+            onClick={e => { e.stopPropagation(); setEditTr({ id: r.id, val: r.no_transkrip || '' }) }}
+          >
+            {r.no_transkrip
+              ? <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded group-hover:bg-purple-100">{r.no_transkrip}</span>
+              : <span className="text-gray-400 italic group-hover:text-purple-400">Klik untuk isi...</span>
+            }
+            <span className="opacity-0 group-hover:opacity-50 text-gray-400 text-[10px]">✏</span>
+          </span>
+        )
+    },
     { key:'jk', header:'JK', width:'48px', align:'center' as const,
       render:(r:Siswa) => <Badge color={r.jk==='Laki-laki'?'blue':'purple'}>{r.jk==='Laki-laki'?'L':'P'}</Badge> },
     { key:'jml_nilai', header:'Nilai', width:'64px', align:'center' as const,
@@ -235,6 +298,7 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" icon={<Hash className="w-4 h-4"/>} onClick={() => setGenModal(true)}>Generate No SKL</Button>
+            <Button variant="secondary" icon={<Hash className="w-4 h-4"/>} onClick={() => setGenTrModal(true)}>Generate No Transkrip</Button>
             <Button icon={<Plus className="w-4 h-4"/>} onClick={openAdd}>Tambah Siswa</Button>
           </div>
         }/>
@@ -314,6 +378,63 @@ export function SiswaPage({ showToast }: { showToast: (msg: string, type?: any) 
             </p>
             <p className="text-xs text-amber-600 mt-2 bg-amber-50 rounded px-2 py-1.5">
               ⚠️ Ini akan menimpa semua No SKL yang sudah ada untuk {data.length} siswa.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Modal Generate No Transkrip ── */}
+      <Modal open={genTrModal} onClose={() => setGenTrModal(false)} title="Generate Nomor Transkrip Otomatis" size="md"
+        footer={<>
+          <Button variant="secondary" onClick={() => setGenTrModal(false)}>Batal</Button>
+          <Button icon={<RefreshCw className="w-4 h-4"/>} loading={genTrLoading} onClick={handleGenerateTranskrip}>
+            Generate untuk {data.length} Siswa
+          </Button>
+        </>}>
+        <div className="flex flex-col gap-4">
+          {/* Info variabel */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
+            <p className="font-semibold mb-1.5">Variabel yang bisa dipakai dalam pola:</p>
+            <div className="flex flex-wrap gap-2">
+              {['{no_urut}','  {bulan}','  {tahun}'].map(v => (
+                <code key={v} className="bg-white border border-blue-200 px-2 py-0.5 rounded font-mono">{v.trim()}</code>
+              ))}
+            </div>
+            <p className="mt-2 text-blue-600">
+              <strong>{'{bulan}'}</strong> = bulan romawi saat ini &nbsp;|&nbsp;
+              <strong>{'{tahun}'}</strong> = tahun saat ini &nbsp;|&nbsp;
+              <strong>{'{no_urut}'}</strong> = nomor urut 3 digit (001, 002, ...) — otomatis naik mengikuti jumlah siswa
+            </p>
+          </div>
+
+          {/* Pola bebas */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pola Nomor Transkrip</label>
+            <input
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={genTrOpts.pola}
+              onChange={e => setGenTrOpts(o => ({ ...o, pola: e.target.value }))}
+              placeholder="421.2/{no_urut}/TRN/{bulan}/{tahun}"
+            />
+            <p className="text-xs text-gray-400">Ketik bebas — tambahkan slash, titik, atau teks apapun sesuai format nomor sekolah Anda</p>
+          </div>
+
+          <Input
+            label="Nomor Urut Mulai"
+            type="number" min="1"
+            value={genTrOpts.mulai_dari}
+            onChange={e => setGenTrOpts(o => ({ ...o, mulai_dari: e.target.value }))}
+            placeholder="1"
+          />
+
+          {/* Preview */}
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-1.5">Preview Nomor Siswa Pertama:</p>
+            <p className="font-mono text-sm font-bold text-gray-800 bg-white border border-gray-200 rounded-lg px-3 py-2">
+              {genTrPreview || <span className="text-gray-400 italic">—</span>}
+            </p>
+            <p className="text-xs text-amber-600 mt-2 bg-amber-50 rounded px-2 py-1.5">
+              ⚠️ Ini akan menimpa semua No Transkrip yang sudah ada untuk {data.length} siswa. Nomor akan naik urut 1 per siswa (001, 002, 003, ...).
             </p>
           </div>
         </div>
