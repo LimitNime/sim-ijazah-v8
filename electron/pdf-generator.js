@@ -1473,7 +1473,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     const allMapel = mapelList
     // Jumlah baris = max(jumlah mapel, minimum 12), tapi pastikan muat di halaman
     const minRows = Math.max(allMapel.length, 10)
-    const totalRows = minRows
+    const totalRows = minRows + 1   // +1 untuk baris Rata-rata
     // Tinggi setiap baris: isi sisa halaman, max 36pt agar tidak terlalu jarang
     const rowH = Math.min(15, Math.max(14, Math.floor((availH - hdrH) / totalRows)))
 
@@ -1496,8 +1496,10 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     y += hdrH
 
     // Baris data mapel
+    const nilaiValues = []
     allMapel.forEach((m, i) => {
       const v = getAvgNilai(siswa.id, m.id)
+      if (v != null) nilaiValues.push(v)
 
       doc.rect(ml, y, cw, rowH).lineWidth(0.5).stroke('#000')
       doc.moveTo(ml + noW,       y).lineTo(ml + noW,       y + rowH).lineWidth(0.4).stroke('#000')
@@ -1514,8 +1516,8 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
       y += rowH
     })
 
-    // Baris kosong pelengkap — isi sisa baris agar tabel penuh
-    const emptyRows = totalRows - allMapel.length
+    // Baris kosong pelengkap — isi sisa baris agar tabel penuh (menyisakan 1 baris untuk Rata-rata)
+    const emptyRows = totalRows - allMapel.length - 1
     for (let i = 0; i < emptyRows; i++) {
       doc.rect(ml, y, cw, rowH).lineWidth(0.5).stroke('#000')
       doc.moveTo(ml + noW,       y).lineTo(ml + noW,       y + rowH).lineWidth(0.4).stroke('#000')
@@ -1528,6 +1530,21 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
       }
       y += rowH
     }
+
+    // Baris Rata-rata — No & Mata Pelajaran digabung, nilai rata-rata di kolom Nilai
+    const rataRata = nilaiValues.length
+      ? nilaiValues.reduce((a, b) => a + b, 0) / nilaiValues.length
+      : null
+    doc.rect(ml, y, cw, rowH).lineWidth(0.5).stroke('#000')
+    doc.moveTo(ml + noW + mpW, y).lineTo(ml + noW + mpW, y + rowH).lineWidth(0.4).stroke('#000')
+    const textYavg = y + Math.max(2, (rowH - 10) / 2)
+    doc.font(fB).fontSize(9.5).fillColor('#000')
+      .text('Rata-rata', ml + noW + 4, textYavg, { width: mpW - 8 })
+    if (rataRata != null) {
+      doc.font(fB).fontSize(9.5)
+        .text(fmtN(rataRata, 2), ml + noW + mpW + 2, textYavg, { width: nilW - 4, align: 'center' })
+    }
+    y += rowH
 
     // Garis penutup tabel
     doc.moveTo(ml, tblTop).lineTo(ml, y).lineWidth(0.7).stroke('#000')
