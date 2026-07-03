@@ -42,16 +42,6 @@ const JENIS_SURAT = [
     info: 'Muncul di header dokumen Nilai Ijazah per siswa.',
     icon: '📝',
   },
-  {
-    key: 'transkrip',
-    label: 'Transkrip Nilai',
-    field: 'no_transkrip',
-    keterangan: 'Muncul di baris "Nomor:" pada header Transkrip Nilai.',
-    contoh: '421.2/TRN/001/V/2025',
-    polaDefault: '421.2/TRN/{no_urut}/{bulan}/{tahun}',
-    info: 'Muncul di baris "Nomor:" pada header dokumen Transkrip Nilai per siswa.',
-    icon: '📋',
-  },
 ]
 
 const BULAN_ROMAWI = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII']
@@ -146,7 +136,7 @@ export function PenomoranSuratPage({ showToast }: { showToast: (msg: string, typ
           <p className="font-semibold mb-0.5">Nomor per dokumen (bukan per siswa)</p>
           <p className="text-xs text-blue-600">
             Nomor di sini akan muncul di semua siswa saat cetak batch.
-            Untuk nomor per siswa (SKL individual, Blanko Ijazah, SKKB individual) — atur di menu Data Siswa.
+            Untuk nomor per siswa (SKL individual, Blanko Ijazah, SKKB individual, <strong>Transkrip Nilai</strong>) — atur di menu Data Siswa.
           </p>
         </div>
       </div>
