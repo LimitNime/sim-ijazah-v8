@@ -1431,7 +1431,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
       .text('TRANSKRIP NILAI', ml, y, { width: cw, align: 'center' })
     y += 16
     doc.font(fR).fontSize(9.5)
-      .text(`Nomor: ${s.no_transkrip || '...................................'}`, ml, y, { width: cw, align: 'center' })
+      .text(`Nomor: ${siswa.no_transkrip || '...................................'}`, ml, y, { width: cw, align: 'center' })
     y += 26
 
     // ════════════════════════════════════════════════════════════════════
