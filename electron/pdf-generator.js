@@ -1465,12 +1465,11 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     // Rumus: sisa halaman = ph - mb - footnote(~28) - TTD(~110) - gapTblTTD(18) - y_sekarang
     // ════════════════════════════════════════════════════════════════════
     const tglTtd = fmtTgl(s.tgl_ttd_kepsek || s.tgl_lulus)
-    const footnoteH = 28   // 2 baris footnote italic
     const ttdH      = 145  // kota+kepala+ruangTTD+nama+NIP (3cm)
     const gapH      = 20   // gap antara tabel dan TTD
     const hdrH      = 22   // tinggi header tabel
 
-    const availH = ph - mb - footnoteH - ttdH - gapH - y   // tinggi total untuk tabel
+    const availH = ph - mb - ttdH - gapH - y   // tinggi total untuk tabel
     const allMapel = mapelList
     // Jumlah baris = max(jumlah mapel, minimum 12), tapi pastikan muat di halaman
     const minRows = Math.max(allMapel.length, 10)
@@ -1577,17 +1576,6 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     y += 5
     doc.font(fR).fontSize(9.5)
       .text(`NIP. ${s.nip || '...................................'}`, ttdX, y, { width: ttdW, align: 'center' })
-    y += 30
-
-    // ════════════════════════════════════════════════════════════════════
-    // FOOTNOTE italic
-    // ════════════════════════════════════════════════════════════════════
-    doc.font(fI).fontSize(8.5).fillColor('#000')
-      .text(
-        'Transkrip Nilai ini telah dicetak ulang tanpa mengubah muatan Transkrip Nilai dan ' +
-        'ditandatangani sesuai dengan ketentuan yang berlaku.',
-        ml, y, { width: cw, align: 'justify', lineGap: 4 }
-      )
   })
 
   doc.end()
