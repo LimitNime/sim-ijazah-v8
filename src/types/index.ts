@@ -21,6 +21,7 @@ export interface Sekolah {
   website: string
   tahun_ajaran: string
   tgl_lulus: string
+  tgl_ttd_kepsek?: string  // tanggal TTD kepsek di Transkrip Nilai & Ijazah (jika beda dari tgl_lulus)
   bobot_raport: number
   bobot_ujian: number
   jenjang: string
@@ -95,6 +96,7 @@ export interface Siswa {
   no_peserta: string
   blanko: string
   no_skl?: string
+  no_transkrip?: string
   no_skkb?: string
   jenis_kekhususan?: string
   // Media
