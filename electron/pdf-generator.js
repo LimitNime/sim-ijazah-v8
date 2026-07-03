@@ -1347,9 +1347,10 @@ function generateIjazah(outputPath, { sekolah: s, siswaList }) {
     // TTD Kepala — kanan foto, rata
     const ttdX = fotoX + fotoW + 22
     const ttdW = pw - mr - ttdX
+    const tglTtd = fmtTgl(s.tgl_ttd_kepsek || s.tgl_lulus)
 
     doc.font(fR).fontSize(10)
-      .text(`${s.kota || ''}, ${tglSk}`, ttdX, fotoY + 4, { width: ttdW, align: 'center' })
+      .text(`${s.kota || ''}, ${tglTtd}`, ttdX, fotoY + 4, { width: ttdW, align: 'center' })
     doc.text('Kepala,', ttdX, fotoY + 18, { width: ttdW, align: 'center' })
 
     // Nama kepala — garis bawah dinamis sesuai panjang nama
@@ -1463,7 +1464,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     // HITUNG TINGGI YANG TERSEDIA UNTUK TABEL
     // Rumus: sisa halaman = ph - mb - footnote(~28) - TTD(~110) - gapTblTTD(18) - y_sekarang
     // ════════════════════════════════════════════════════════════════════
-    const tglSk = fmtTgl(s.tgl_lulus)
+    const tglTtd = fmtTgl(s.tgl_ttd_kepsek || s.tgl_lulus)
     const footnoteH = 28   // 2 baris footnote italic
     const ttdH      = 145  // kota+kepala+ruangTTD+nama+NIP (3cm)
     const gapH      = 20   // gap antara tabel dan TTD
@@ -1560,7 +1561,7 @@ function generateTranskrip(outputPath, { sekolah: s, siswaList, mapelList, nilai
     const ttdW = pw - mr - ttdX
 
     doc.font(fR).fontSize(9.5).fillColor('#000')
-      .text(`${s.kota || ''}, ${tglSk}`, ttdX, y, { width: ttdW, align: 'center' })
+      .text(`${s.kota || ''}, ${tglTtd}`, ttdX, y, { width: ttdW, align: 'center' })
     y += 14
     doc.text('Kepala Sekolah,', ttdX, y, { width: ttdW, align: 'center' })
     y += 85   // 3cm ruang tanda tangan
