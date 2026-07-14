@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld('api', {
     update:     (id,d) => invoke('guru:update', id, d),
     delete:     id     => invoke('guru:delete', id),
     uploadFoto: id     => invoke('guru:upload_foto', id),
+    updateKetersediaan: (id,d) => invoke('guru:update_ketersediaan', id, d),
   },
   absensiGuru: {
     get:   tanggal        => invoke('absensi_guru:get', tanggal),
@@ -209,6 +210,33 @@ contextBridge.exposeInMainWorld('api', {
   jadwal: {
     get:   kelas_id        => invoke('jadwal:get', kelas_id),
     save:  (kelas_id, rows) => invoke('jadwal:save', kelas_id, rows),
+  },
+  pengaturanJam: {
+    list:       ()                 => invoke('pengaturan_jam:list'),
+    saveHari:   (hari, rows)       => invoke('pengaturan_jam:save_hari', hari, rows),
+    copyHari:   (dariHari, keList) => invoke('pengaturan_jam:copy_hari', dariHari, keList),
+    seedContoh: ()                 => invoke('pengaturan_jam:seed_contoh'),
+  },
+  jadwalPelajaran: {
+    getByKelas:      kelas_id       => invoke('jadwal_pelajaran:get_by_kelas', kelas_id),
+    getByGuru:        guru_id       => invoke('jadwal_pelajaran:get_by_guru', guru_id),
+    kuotaGuru:        guru_id       => invoke('jadwal_pelajaran:kuota_guru', guru_id),
+    addBlok:          d             => invoke('jadwal_pelajaran:add_blok', d),
+    editBlok:         d             => invoke('jadwal_pelajaran:edit_blok', d),
+    hapusBlok:        blok_id       => invoke('jadwal_pelajaran:hapus_blok', blok_id),
+    hapusSatu:        id            => invoke('jadwal_pelajaran:hapus_satu', id),
+    rekomendasiHari:  params        => invoke('jadwal_pelajaran:rekomendasi_hari', params),
+    workload:         ()            => invoke('jadwal_pelajaran:workload'),
+    matrixHari:       hari          => invoke('jadwal_pelajaran:matrix_hari', hari),
+    generateOtomatis: opts          => invoke('jadwal_pelajaran:generate_otomatis', opts),
+    previewLengkap:   ()            => invoke('jadwal_pelajaran:preview_lengkap'),
+    exportExcel:      ()            => invoke('jadwal_pelajaran:export_excel'),
+    exportPdf:        ()            => invoke('jadwal_pelajaran:export_pdf'),
+    exportPdfGuru:    guru_id       => invoke('jadwal_pelajaran:export_pdf_guru', guru_id),
+  },
+  piket: {
+    list:     ()               => invoke('piket:list'),
+    saveHari: (hari, guruIds)  => invoke('piket:save_hari', hari, guruIds),
   },
   jurnal: {
     list:   (kelas_id, bulan) => invoke('jurnal:list', kelas_id, bulan),
