@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Pencil, Trash2, Eye, X, Save, RefreshCw, ChevronLeft } from 'lucide-react'
 import { Button, Modal, Input, Select, ConfirmDialog, SearchBar, PageHeader, Badge, TextInput, DropDown } from '../ui'
-import { guruApi, absensiGuruApi, jamMengajarApi, skTugasApi, pdfCetakApi } from '../../lib/api'
+import { guruApi, absensiGuruApi, jamMengajarApi, skTugasApi, pdfCetakApi, kelasApi, mapelApi } from '../../lib/api'
 import { clsx } from 'clsx'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -360,13 +360,19 @@ function TabAbsensiGuru({ showToast }: any) {
 // ─── Tab: Jam Mengajar ────────────────────────────────────────────────────────
 function TabJamMengajar({ showToast }: any) {
   const [guruList, setGuruList] = useState<any[]>([])
+  const [kelasList, setKelasList] = useState<any[]>([])
+  const [mapelList, setMapelList] = useState<any[]>([])
   const [data, setData] = useState<any[]>([])
   const [ta, setTa] = useState(new Date().getFullYear() + '/' + (new Date().getFullYear() + 1))
   const [modal, setModal] = useState<{ open: boolean; form: any }>({ open: false, form: {} })
   const [saving, setSaving] = useState(false)
   const [confirm, setConfirm] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
 
-  useEffect(() => { guruApi.list().then((r: any) => setGuruList(Array.isArray(r) ? r : [])) }, [])
+  useEffect(() => {
+    guruApi.list().then((r: any) => setGuruList(Array.isArray(r) ? r : []))
+    kelasApi.list().then((r: any) => setKelasList(Array.isArray(r) ? r : []))
+    mapelApi.list().then((r: any) => setMapelList(Array.isArray(r) ? r : []))
+  }, [])
   useEffect(() => { load() }, [ta])
 
   const load = async () => {
@@ -375,6 +381,8 @@ function TabJamMengajar({ showToast }: any) {
   }
   const handleSave = async () => {
     if (!modal.form.guru_id) { showToast('Pilih guru', 'error'); return }
+    if (!modal.form.mapel_id) { showToast('Pilih mata pelajaran', 'error'); return }
+    if (!modal.form.kelas_id) { showToast('Pilih kelas', 'error'); return }
     setSaving(true)
     await jamMengajarApi.save({ ...modal.form, tahun_ajaran: ta })
     setModal(m => ({ ...m, open: false }))
@@ -386,12 +394,14 @@ function TabJamMengajar({ showToast }: any) {
     if (!confirm.id) return
     await jamMengajarApi.delete(confirm.id)
     setConfirm({ open: false, id: null })
-    showToast('Data dihapus')
+    showToast('Data & jadwal terkait dihapus')
     load()
   }
 
   const totalJam = data.reduce((a: number, r: any) => a + (r.jumlah_jam || 0), 0)
   const guruOpt = [{ value: '', label: '— Pilih guru —' }, ...guruList.map((g: any) => ({ value: g.id, label: g.nama }))]
+  const mapelOpt = [{ value: '', label: '— Pilih mapel —' }, ...mapelList.map((m: any) => ({ value: m.id, label: m.nama }))]
+  const kelasOpt = [{ value: '', label: '— Pilih kelas —' }, ...kelasList.map((k: any) => ({ value: k.id, label: `${k.nama} (${k.tingkat || '-'})` }))]
 
   return (
     <div className="space-y-4">
@@ -401,13 +411,14 @@ function TabJamMengajar({ showToast }: any) {
           <input value={ta} onChange={e => setTa(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-32" placeholder="2024/2025" />
         </div>
         <span className="text-sm text-gray-500">Total: <strong>{totalJam}</strong> jam/minggu</span>
+        <span className="text-xs text-gray-400">· Ini kuota mengajar. Untuk menempatkannya ke hari & jam, buka menu <strong>Jadwal Pelajaran</strong>.</span>
         <div className="flex-1" />
         <Button onClick={() => setModal({ open: true, form: { jumlah_jam: 1, tahun_ajaran: ta } })} icon={<Plus className="w-4 h-4" />}>Tambah</Button>
       </div>
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b">
-            <tr>{['No', 'Nama Guru', 'Mata Pelajaran', 'Kelas', 'Jml Jam', 'Aksi'].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">{h}</th>)}</tr>
+            <tr>{['No', 'Nama Guru', 'Mata Pelajaran', 'Kelas', 'Jml Jam', 'Sisa Blm Terjadwal', 'Aksi'].map(h => <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500">{h}</th>)}</tr>
           </thead>
           <tbody className="divide-y">
             {data.map((r: any, i: number) => (
@@ -417,6 +428,11 @@ function TabJamMengajar({ showToast }: any) {
                 <td className="px-3 py-2.5 text-gray-600">{r.mapel || '—'}</td>
                 <td className="px-3 py-2.5 text-gray-600">{r.kelas || '—'}</td>
                 <td className="px-3 py-2.5 text-center"><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">{r.jumlah_jam}</span></td>
+                <td className="px-3 py-2.5 text-center">
+                  {r.sisa > 0
+                    ? <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-bold">{r.sisa} JP</span>
+                    : <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">Lengkap</span>}
+                </td>
                 <td className="px-3 py-2.5">
                   <div className="flex gap-1">
                     <button onClick={() => setModal({ open: true, form: { ...r } })} className="p-1.5 hover:bg-gray-100 rounded-lg"><Pencil className="w-3.5 h-3.5 text-gray-500" /></button>
@@ -425,20 +441,23 @@ function TabJamMengajar({ showToast }: any) {
                 </td>
               </tr>
             ))}
-            {data.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-gray-400">Belum ada data jam mengajar</td></tr>}
+            {data.length === 0 && <tr><td colSpan={7} className="text-center py-8 text-gray-400">Belum ada data jam mengajar</td></tr>}
           </tbody>
         </table>
       </div>
-      <Modal open={modal.open} title="Jam Mengajar" onClose={() => setModal(m => ({ ...m, open: false }))}
+      <Modal open={modal.open} title="Jam Mengajar (Kuota)" onClose={() => setModal(m => ({ ...m, open: false }))}
         footer={<><Button variant="ghost" onClick={() => setModal(m => ({ ...m, open: false }))}>Batal</Button><Button onClick={handleSave} loading={saving}>Simpan</Button></>}>
         <div className="space-y-3">
           <DropDown label="Guru *" value={String(modal.form.guru_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, guru_id: Number(v) } }))} options={guruOpt} />
-          <TextInput label="Mata Pelajaran" value={modal.form.mapel || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, mapel: v } }))} placeholder="Matematika" />
-          <TextInput label="Kelas" value={modal.form.kelas || ''} onChange={v => setModal(m => ({ ...m, form: { ...m.form, kelas: v } }))} placeholder="VII A, VII B, VIII A..." />
-          <TextInput label="Jumlah Jam/Minggu" value={String(modal.form.jumlah_jam || 1)} onChange={v => setModal(m => ({ ...m, form: { ...m.form, jumlah_jam: Number(v) } }))} type="number" />
+          <DropDown label="Mata Pelajaran *" value={String(modal.form.mapel_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, mapel_id: Number(v) } }))} options={mapelOpt} />
+          <DropDown label="Kelas *" value={String(modal.form.kelas_id || '')} onChange={v => setModal(m => ({ ...m, form: { ...m.form, kelas_id: Number(v) } }))} options={kelasOpt} />
+          <TextInput label="Jumlah Jam/Minggu (JP)" value={String(modal.form.jumlah_jam || 1)} onChange={v => setModal(m => ({ ...m, form: { ...m.form, jumlah_jam: Number(v) } }))} type="number" />
+          {modal.form.mapel && !modal.form.mapel_id && (
+            <p className="text-xs text-amber-600">Data lama: mapel "{modal.form.mapel}" / kelas "{modal.form.kelas}" belum tertaut ke master. Pilih ulang di atas agar bisa dipakai di modul Jadwal Pelajaran.</p>
+          )}
         </div>
       </Modal>
-      <ConfirmDialog open={confirm.open} title="Hapus Data" message="Hapus data jam mengajar ini?" danger onConfirm={handleDelete} onCancel={() => setConfirm({ open: false, id: null })} />
+      <ConfirmDialog open={confirm.open} title="Hapus Data" message="Hapus kuota ini? Bagian jadwal yang sudah ditempatkan dari kuota ini juga akan ikut terhapus." danger onConfirm={handleDelete} onCancel={() => setConfirm({ open: false, id: null })} />
     </div>
   )
 }
