@@ -126,6 +126,7 @@ const FONT_LIST = Object.keys(FONT_CATALOG)
 const PAPER = {
   A4:  [595.28, 841.89],   // 210x297mm
   F4:  [609.45, 935.43],   // 215x330mm (Folio)
+  A3:  [841.89, 1190.55],  // 297x420mm
 }
 function getPaperSize(s, landscape) {
   const key  = (s.pdf_ukuran || 'A4').toUpperCase()
@@ -1941,6 +1942,8 @@ module.exports = {
   generateBukuIndukGuru,
   generateAbsensiGuru,
   generateJadwal,
+  generateJadwalLengkap,
+  generateJadwalGuru,
   generateJurnal,
   generateAbsensiSiswa,
   generateSurat,
@@ -2506,6 +2509,224 @@ function generateJadwal(outputPath, { sekolah: s, kelas, jadwalList }) {
       }
     })
     y += ROW_H
+  }
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  JADWAL PELAJARAN LENGKAP — PDF poster 1 halaman, layout 3 kolom sejajar
+//  (Senin/Selasa/Rabu | Kamis/Jumat/Sabtu | Legenda Kode Guru + Piket)
+//  meniru susunan jadwal cetak sekolah asli. Dipaksa kertas A3 lanskap supaya
+//  seluruh 6 hari + legenda + piket muat dalam 1 halaman.
+// ══════════════════════════════════════════════════════════════════════════
+function generateJadwalLengkap(outputPath, { sekolah: s, kelasList, hariList, jamByHari, isiByHari, kodeGuruMap, piket }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+
+  const sForPaper = { ...s, pdf_ukuran: 'A3' }
+  const [pw, ph] = getPaperSize(sForPaper, false) // portrait sesuai permintaan
+  const ml = 22, mr = 22
+  const cw = pw - ml - mr
+
+  const doc = new PDFDocument({ size: [pw, ph], margins: { top: 16, bottom: 18, left: ml, right: mr }, autoFirstPage: false })
+  const fn = path.join(outputPath, `Jadwal_Pelajaran_Lengkap_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  const GURU_HEX = ['#B8D4F0', '#F4B8CC', '#B8E6C9', '#F7D394', '#D4B8E8', '#A8E0E0', '#F0B8B8', '#D9E8A8', '#B8C0E8', '#F0C89E', '#A8D4CC', '#E8B8E0']
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+  doc.font(f.B).fontSize(13).fillColor('#000').text('JADWAL PELAJARAN', ml, y, { width: cw, align: 'center' })
+  y += 15
+  doc.font(f.R).fontSize(8.5).fillColor('#444').text(`${s.nama_sekolah || ''}${s.tahun_ajaran ? `  |  Tahun Ajaran ${s.tahun_ajaran}` : ''}`, ml, y, { width: cw, align: 'center' })
+  y += 13
+  const topY = y
+
+  const GAP = 12
+  const zoneW = (cw - GAP * 2) / 3
+  const zoneX = [ml, ml + zoneW + GAP, ml + 2 * (zoneW + GAP)]
+
+  const JAM_W = 20, WAKTU_W = 40
+  const N = Math.max(kelasList.length, 1)
+  const KELAS_W = (zoneW - JAM_W - WAKTU_W) / N
+  const ROW_H = 11.3, HEAD_H = 13, TITLE_H = 12.5
+  const FS_DATA = 6.6, FS_HEAD = 6.6, FS_TITLE = 7.6
+
+  function drawHariTable(x, yStart, hari) {
+    let yy = yStart
+    const jamRows = (jamByHari[hari] || []).slice().sort((a, b) => a.jam_ke - b.jam_ke)
+    if (jamRows.length === 0) return yy
+
+    doc.rect(x, yy, zoneW, TITLE_H).fillAndStroke('#2e6da4', '#2e6da4')
+    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text(hari.toUpperCase(), x, yy + 2.6, { width: zoneW, align: 'center' })
+    yy += TITLE_H
+
+    doc.rect(x, yy, zoneW, HEAD_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+    doc.font(f.B).fontSize(FS_HEAD).fillColor('#fff')
+    doc.text('Jam', x, yy + 3.2, { width: JAM_W, align: 'center' })
+    doc.text('Waktu', x + JAM_W, yy + 3.2, { width: WAKTU_W, align: 'center' })
+    kelasList.forEach((k, i) => doc.text(k.nama, x + JAM_W + WAKTU_W + i * KELAS_W, yy + 3.2, { width: KELAS_W, align: 'center', ellipsis: true }))
+    yy += HEAD_H
+
+    jamRows.forEach(j => {
+      if (j.tipe !== 'mengajar') {
+        doc.rect(x, yy, JAM_W, ROW_H).fillAndStroke('#fff', '#ddd')
+        doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(String(j.jam_ke), x, yy + 2.4, { width: JAM_W, align: 'center' })
+        doc.rect(x + JAM_W, yy, WAKTU_W, ROW_H).fillAndStroke('#fff', '#ddd')
+        doc.font(f.R).fontSize(5.8).fillColor('#333').text(`${j.jam_mulai}-${j.jam_selesai}`, x + JAM_W, yy + 2.4, { width: WAKTU_W, align: 'center' })
+        doc.rect(x + JAM_W + WAKTU_W, yy, zoneW - JAM_W - WAKTU_W, ROW_H).fillAndStroke('#FFE066', '#ddd')
+        doc.font(f.BI).fontSize(FS_DATA).fillColor('#5c4400').text(j.label || j.tipe, x + JAM_W + WAKTU_W, yy + 2.4, { width: zoneW - JAM_W - WAKTU_W, align: 'center' })
+      } else {
+        doc.rect(x, yy, JAM_W, ROW_H).fillAndStroke('#f3f4f6', '#ddd')
+        doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(String(j.jam_ke), x, yy + 2.4, { width: JAM_W, align: 'center' })
+        doc.rect(x + JAM_W, yy, WAKTU_W, ROW_H).fillAndStroke('#f3f4f6', '#ddd')
+        doc.font(f.R).fontSize(5.8).fillColor('#333').text(`${j.jam_mulai}-${j.jam_selesai}`, x + JAM_W, yy + 2.4, { width: WAKTU_W, align: 'center' })
+        kelasList.forEach((k, ki) => {
+          const cx = x + JAM_W + WAKTU_W + ki * KELAS_W
+          const isi = (isiByHari[hari] || []).find(r => r.kelas_id === k.id && r.jam_ke === j.jam_ke)
+          if (isi && isi.guru_id) {
+            const kg = kodeGuruMap[`${isi.guru_id}|${isi.nama_mapel}`]
+            const bg = kg ? GURU_HEX[kg.warnaIdx % 12] : '#eee'
+            doc.rect(cx, yy, KELAS_W, ROW_H).fillAndStroke(bg, '#ddd')
+            doc.font(f.B).fontSize(FS_DATA + 0.4).fillColor('#1a1a2e').text(kg ? kg.kode : '?', cx, yy + 2.2, { width: KELAS_W, align: 'center' })
+          } else {
+            doc.rect(cx, yy, KELAS_W, ROW_H).fillAndStroke('#fff', '#ddd')
+          }
+        })
+      }
+      yy += ROW_H
+    })
+    return yy + 5
+  }
+
+  const kolom1Hari = hariList.filter(h => ['Senin', 'Selasa', 'Rabu'].includes(h))
+  const kolom2Hari = hariList.filter(h => ['Kamis', 'Jumat', 'Sabtu'].includes(h))
+  const hariLain = hariList.filter(h => !kolom1Hari.includes(h) && !kolom2Hari.includes(h))
+
+  let y1 = topY
+  kolom1Hari.concat(hariLain).forEach(hari => { y1 = drawHariTable(zoneX[0], y1, hari) })
+
+  let y2 = topY
+  kolom2Hari.forEach(hari => { y2 = drawHariTable(zoneX[1], y2, hari) })
+
+  let y3 = topY
+  const legendPairs = Object.values(kodeGuruMap).sort((a, b) => {
+    const na = parseInt(a.kode, 10), nb = parseInt(b.kode, 10)
+    return na !== nb ? na - nb : String(a.kode).localeCompare(String(b.kode))
+  })
+  const KODE_W = 24
+  if (legendPairs.length > 0) {
+    doc.rect(zoneX[2], y3, zoneW, TITLE_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text('KETERANGAN KODE GURU', zoneX[2], y3 + 2.6, { width: zoneW, align: 'center' })
+    y3 += TITLE_H
+    legendPairs.forEach(lg => {
+      const bg = GURU_HEX[lg.warnaIdx % 12]
+      doc.rect(zoneX[2], y3, KODE_W, ROW_H).fillAndStroke(bg, '#ddd')
+      doc.font(f.B).fontSize(FS_DATA).fillColor('#1a1a2e').text(lg.kode, zoneX[2], y3 + 2.4, { width: KODE_W, align: 'center' })
+      doc.rect(zoneX[2] + KODE_W, y3, zoneW - KODE_W, ROW_H).fillAndStroke('#fff', '#ddd')
+      doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(`${lg.nama_guru || '-'} — ${lg.nama_mapel || '-'}`, zoneX[2] + KODE_W + 3, y3 + 2.4, { width: zoneW - KODE_W - 5, align: 'left', ellipsis: true })
+      y3 += ROW_H
+    })
+    y3 += 8
+  }
+
+  const piketHari = hariList.filter(h => (piket[h] || []).length > 0)
+  if (piketHari.length > 0) {
+    doc.rect(zoneX[2], y3, zoneW, TITLE_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text('JADWAL PIKET', zoneX[2], y3 + 2.6, { width: zoneW, align: 'center' })
+    y3 += TITLE_H
+    const hariW = 55
+    piketHari.forEach((hari, i) => {
+      const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
+      doc.rect(zoneX[2], y3, hariW, ROW_H * 1.6).fillAndStroke(bg, '#ddd')
+      doc.font(f.B).fontSize(FS_DATA).fillColor('#1e3a5f').text(hari, zoneX[2] + 3, y3 + 2, { width: hariW - 6, align: 'left' })
+      doc.rect(zoneX[2] + hariW, y3, zoneW - hariW, ROW_H * 1.6).fillAndStroke(bg, '#ddd')
+      doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text((piket[hari] || []).join(', '), zoneX[2] + hariW + 3, y3 + 2, { width: zoneW - hariW - 6, align: 'left' })
+      y3 += ROW_H * 1.6
+    })
+  }
+
+  doc.end()
+  return fn
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  JADWAL MENGAJAR PER GURU — PDF jadwal pribadi 1 guru (semua kelas & hari)
+// ══════════════════════════════════════════════════════════════════════════
+function generateJadwalGuru(outputPath, { sekolah: s, guru, rows }) {
+  const PDFDocument = require('pdfkit')
+  const fs = require('fs')
+  const path = require('path')
+  const [pw, ph] = getPaperSize(s, false)
+  const ml = 45, mr = 45, cw = pw - ml - mr
+  const bottomLimit = ph - 40
+
+  const doc = new PDFDocument({ size: [pw, ph], margins: { top: 18, bottom: 30, left: ml, right: mr }, autoFirstPage: false })
+  const safeName = (guru?.nama || 'Guru').replace(/[^a-zA-Z0-9]+/g, '_')
+  const fn = path.join(outputPath, `Jadwal_${safeName}_${Date.now()}.pdf`)
+  doc.pipe(fs.createWriteStream(fn))
+  const f = fontSetup(doc, s)
+
+  doc.addPage()
+  let y = drawKopResmi(doc, s, ml, cw)
+  doc.font(f.B).fontSize(13).fillColor('#000').text('JADWAL MENGAJAR', ml, y, { width: cw, align: 'center' })
+  y += 17
+  doc.font(f.B).fontSize(10.5).fillColor('#1e3a5f').text(guru?.nama || '-', ml, y, { width: cw, align: 'center' })
+  y += 14
+  const subInfo = [guru?.nip ? `NIP ${guru.nip}` : null, guru?.jabatan || null, s.tahun_ajaran ? `T.A ${s.tahun_ajaran}` : null].filter(Boolean).join('  |  ')
+  if (subInfo) { doc.font(f.R).fontSize(8.5).fillColor('#555').text(subInfo, ml, y, { width: cw, align: 'center' }); y += 12 }
+  y += 8
+
+  const totalJP = rows.length
+  doc.font(f.R).fontSize(9).fillColor('#333').text(`Total mengajar: ${totalJP} JP/minggu`, ml, y, { width: cw, align: 'right' })
+  y += 16
+
+  const colW = { hari: 80, jam: 45, waktu: 80, kelas: 90, mapel: cw - 80 - 45 - 80 - 90 }
+  const ROW_H = 20, HEAD_H = 22
+
+  function ensureSpace(need, redraw) {
+    if (y + need > bottomLimit) { doc.addPage(); y = drawKopResmi(doc, s, ml, cw); if (redraw) redraw() }
+  }
+  function drawHeader() {
+    doc.rect(ml, y, cw, HEAD_H).fillAndStroke('#1e3a5f', '#1e3a5f')
+    doc.font(f.B).fontSize(8.5).fillColor('#fff')
+    let x = ml
+    doc.text('Hari', x + 4, y + 6, { width: colW.hari - 8 }); x += colW.hari
+    doc.text('Jam Ke', x, y + 6, { width: colW.jam, align: 'center' }); x += colW.jam
+    doc.text('Waktu', x, y + 6, { width: colW.waktu, align: 'center' }); x += colW.waktu
+    doc.text('Kelas', x + 4, y + 6, { width: colW.kelas - 8 }); x += colW.kelas
+    doc.text('Mata Pelajaran', x + 4, y + 6, { width: colW.mapel - 8 })
+    y += HEAD_H
+  }
+
+  if (rows.length === 0) {
+    ensureSpace(HEAD_H + ROW_H)
+    drawHeader()
+    doc.rect(ml, y, cw, ROW_H).fillAndStroke('#fff', '#ddd')
+    doc.font(f.I).fontSize(9).fillColor('#999').text('Belum ada jadwal yang ditempatkan untuk guru ini.', ml, y + 5, { width: cw, align: 'center' })
+    y += ROW_H
+  } else {
+    ensureSpace(HEAD_H + ROW_H)
+    drawHeader()
+    let hariBefore = ''
+    rows.forEach((r, i) => {
+      ensureSpace(ROW_H, drawHeader)
+      const bg = i % 2 === 0 ? '#fff' : '#f7f9fc'
+      doc.rect(ml, y, cw, ROW_H).fillAndStroke(bg, '#e5e7eb')
+      let x = ml
+      const tampilHari = r.hari !== hariBefore
+      hariBefore = r.hari
+      doc.font(tampilHari ? f.B : f.R).fontSize(8.5).fillColor(tampilHari ? '#1e3a5f' : '#ccc').text(tampilHari ? r.hari : '', x + 4, y + 6, { width: colW.hari - 8 }); x += colW.hari
+      doc.font(f.R).fontSize(8.5).fillColor('#333').text(String(r.jam_ke), x, y + 6, { width: colW.jam, align: 'center' }); x += colW.jam
+      doc.text(`${r.jam_mulai || ''}-${r.jam_selesai || ''}`, x, y + 6, { width: colW.waktu, align: 'center' }); x += colW.waktu
+      doc.text(r.nama_kelas || '-', x + 4, y + 6, { width: colW.kelas - 8 }); x += colW.kelas
+      doc.font(f.B).fontSize(8.5).fillColor('#1a1a2e').text(r.nama_mapel || '-', x + 4, y + 6, { width: colW.mapel - 8, ellipsis: true })
+      y += ROW_H
+    })
   }
 
   doc.end()
