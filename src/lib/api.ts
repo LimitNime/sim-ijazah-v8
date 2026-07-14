@@ -14,6 +14,7 @@ export const guruApi = {
   update:     (id:number, d:any)=> api?.guru.update(id, d),
   delete:     (id:number)       => api?.guru.delete(id),
   uploadFoto: (id:number)       => api?.guru.uploadFoto(id),
+  updateKetersediaan: (id:number, d:any) => api?.guru.updateKetersediaan(id, d),
 }
 export const absensiGuruApi = {
   get:   (tanggal:string)           => api?.absensiGuru.get(tanggal),
@@ -114,6 +115,33 @@ export const denahApi = {
 export const jadwalApi = {
   get:  (kelas_id:number)              => api?.jadwal.get(kelas_id),
   save: (kelas_id:number, rows:any[])  => api?.jadwal.save(kelas_id, rows),
+}
+export const pengaturanJamApi = {
+  list:       ()                            => api?.pengaturanJam.list() ?? [],
+  saveHari:   (hari:string, rows:any[])     => api?.pengaturanJam.saveHari(hari, rows),
+  copyHari:   (dariHari:string, keList:string[]) => api?.pengaturanJam.copyHari(dariHari, keList),
+  seedContoh: ()                            => api?.pengaturanJam.seedContoh(),
+}
+export const jadwalPelajaranApi = {
+  getByKelas:      (kelas_id:number) => api?.jadwalPelajaran.getByKelas(kelas_id) ?? [],
+  getByGuru:       (guru_id:number)  => api?.jadwalPelajaran.getByGuru(guru_id) ?? [],
+  kuotaGuru:       (guru_id:number)  => api?.jadwalPelajaran.kuotaGuru(guru_id) ?? [],
+  addBlok:         (d:any)           => api?.jadwalPelajaran.addBlok(d),
+  editBlok:        (d:any)           => api?.jadwalPelajaran.editBlok(d),
+  hapusBlok:       (blok_id:string)  => api?.jadwalPelajaran.hapusBlok(blok_id),
+  hapusSatu:       (id:number)       => api?.jadwalPelajaran.hapusSatu(id),
+  rekomendasiHari: (params:any)      => api?.jadwalPelajaran.rekomendasiHari(params) ?? [],
+  workload:        ()                => api?.jadwalPelajaran.workload() ?? [],
+  matrixHari:      (hari:string)     => api?.jadwalPelajaran.matrixHari(hari),
+  generateOtomatis:(opts?:any)       => api?.jadwalPelajaran.generateOtomatis(opts||{}),
+  previewLengkap:  ()                => api?.jadwalPelajaran.previewLengkap(),
+  exportExcel:     ()                => api?.jadwalPelajaran.exportExcel(),
+  exportPdf:       ()                => api?.jadwalPelajaran.exportPdf(),
+  exportPdfGuru:   (guru_id:number)  => api?.jadwalPelajaran.exportPdfGuru(guru_id),
+}
+export const piketApi = {
+  list:     ()                            => api?.piket.list() ?? [],
+  saveHari: (hari:string, guruIds:number[]) => api?.piket.saveHari(hari, guruIds),
 }
 export const jurnalApi = {
   list:   (kelas_id:number, bulan?:string) => api?.jurnal.list(kelas_id, bulan),
