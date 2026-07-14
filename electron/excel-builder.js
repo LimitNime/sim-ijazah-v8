@@ -53,6 +53,23 @@ const STYLE_DEFS = [
   { font: { sz:9 }, fill: T.WHT, border: 'thin', align: 'left' },
   // 10 – value biodata baris ganjil
   { font: { sz:9 }, fill: T.ALT, border: 'thin', align: 'left' },
+  // 11-22 – palet warna per-guru (dipakai di cetak Jadwal Pelajaran lengkap), tengah+bold
+  { font: { sz:9, bold:true }, fill: 'FFB8D4F0', border: 'thin', align: 'center' }, // 11 biru
+  { font: { sz:9, bold:true }, fill: 'FFF4B8CC', border: 'thin', align: 'center' }, // 12 pink
+  { font: { sz:9, bold:true }, fill: 'FFB8E6C9', border: 'thin', align: 'center' }, // 13 hijau
+  { font: { sz:9, bold:true }, fill: 'FFF7D394', border: 'thin', align: 'center' }, // 14 oranye
+  { font: { sz:9, bold:true }, fill: 'FFD4B8E8', border: 'thin', align: 'center' }, // 15 ungu
+  { font: { sz:9, bold:true }, fill: 'FFA8E0E0', border: 'thin', align: 'center' }, // 16 cyan
+  { font: { sz:9, bold:true }, fill: 'FFF0B8B8', border: 'thin', align: 'center' }, // 17 merah muda
+  { font: { sz:9, bold:true }, fill: 'FFD9E8A8', border: 'thin', align: 'center' }, // 18 lime
+  { font: { sz:9, bold:true }, fill: 'FFB8C0E8', border: 'thin', align: 'center' }, // 19 indigo
+  { font: { sz:9, bold:true }, fill: 'FFF0C89E', border: 'thin', align: 'center' }, // 20 peach
+  { font: { sz:9, bold:true }, fill: 'FFA8D4CC', border: 'thin', align: 'center' }, // 21 teal
+  { font: { sz:9, bold:true }, fill: 'FFE8B8E0', border: 'thin', align: 'center' }, // 22 fuchsia
+  // 23 – slot non-mengajar (istirahat/upacara/pembiasaan), kuning
+  { font: { sz:9, bold:true, italic:true }, fill: 'FFFFE066', border: 'thin', align: 'center' },
+  // 24 – slot kosong
+  { font: { sz:9, color: 'FFBBBBBB' }, fill: T.WHT, border: 'thin', align: 'center' },
 ]
 // Named aliases untuk kemudahan
 const S = {
@@ -67,6 +84,9 @@ const S = {
   LABEL:      8,
   VAL_EVEN:   9,
   VAL_ODD:    10,
+  GURU:       [11,12,13,14,15,16,17,18,19,20,21,22], // GURU[warnaIdx % 12]
+  NONMENGAJAR:23,
+  KOSONG:     24,
 }
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
@@ -88,7 +108,8 @@ function buildStylesXml() {
   const fonts = STYLE_DEFS.map(d => {
     const f = d.font || {}
     let s = '<font>'
-    if (f.bold)  s += '<b/>'
+    if (f.bold)   s += '<b/>'
+    if (f.italic) s += '<i/>'
     s += `<sz val="${f.sz || 10}"/>`
     s += `<name val="Calibri"/>`
     if (f.color) s += `<color rgb="${f.color}"/>`
@@ -144,58 +165,93 @@ function buildStylesXml() {
 // ── Sheet builder ─────────────────────────────────────────────────────────────
 class Sheet {
   constructor(name) {
-    this.name    = name.slice(0, 31).replace(/[:\\/?*[\]]/g, '_')
-    this._rows   = []      // [{cells:[{v,s}], h}]
-    this._widths = []
-    this._merges = []
-    this._freeze = null    // {row,col}
-    this._maxCol = 0
+    this.name       = name.slice(0, 31).replace(/[:\\/?*[\]]/g, '_')
+    this._cellRows  = new Map()   // rowNum(1-based) -> Map(colNum(1-based) -> {v,s})
+    this._rowHeights= new Map()   // rowNum -> height
+    this._widths    = []
+    this._merges    = []
+    this._freeze    = null        // {row,col}
+    this._maxCol    = 0
+    this._maxRow    = 0
+    this._cursor    = 0           // dipakai addRow() sequential (kompatibel dg pemanggil lama)
   }
 
   setColWidths(arr) { this._widths = arr }
 
+  get rowCount() { return this._cursor }
+
   freezePane(row, col) { this._freeze = { row, col } }
+
+  // paperSize: kode OOXML (8=A3, 9=A4). fitToPage: paksa 1 halaman lebar x 1 halaman tinggi saat print.
+  setPrintSetup({ landscape = true, paperSize = 9, fitToPage = true } = {}) {
+    this._printSetup = { landscape, paperSize, fitToPage }
+  }
 
   mergeCell(r1, c1, r2, c2) {
     this._merges.push(`${cellRef(r1,c1)}:${cellRef(r2,c2)}`)
   }
 
+  _resolveStyle(key, rowIdx) {
+    if (typeof key === 'number') return key // style index langsung (mis. warna per-guru)
+    const even = (rowIdx == null || rowIdx % 2 === 0)
+    switch (key) {
+      case 'header':     return S.HEADER
+      case 'subheader':  return S.SUBHEADER
+      case 'title':      return S.TITLE
+      case 'label':      return S.LABEL
+      case 'data':       return even ? S.DATA_EVEN    : S.DATA_ODD
+      case 'data_l':     return even ? S.DATA_EVEN_L  : S.DATA_ODD_L
+      case 'val':        return even ? S.VAL_EVEN     : S.VAL_ODD
+      case 'val_l':      return even ? S.VAL_EVEN     : S.VAL_ODD
+      default:           return S.DEFAULT
+    }
+  }
+
+  _setCell(row, col, value, style) {
+    if (!this._cellRows.has(row)) this._cellRows.set(row, new Map())
+    this._cellRows.get(row).set(col, { v: value == null ? '' : value, s: style })
+    if (row > this._maxRow) this._maxRow = row
+    if (col > this._maxCol) this._maxCol = col
+  }
+
   /**
-   * addRow(cells, styleKeyOrArray, height?)
-   * cells: array of values (string/number/null)
-   * styleKeyOrArray: single key (applies to all), or array per cell
-   *   keys: 'header','subheader','title','label',
-   *         'data'(even/odd auto), 'data_l'(kiri), 'val', 'val_l', default
-   * rowIdx: dipakai untuk alternating (0-based index data row)
+   * addRow(cells, styleKeyOrArray, height?, rowIdx?)
+   * Perilaku SAMA seperti sebelumnya: menambah baris berikutnya secara berurutan
+   * mulai dari kolom A. Dipakai oleh semua laporan yg sudah ada (raport, leger, dst).
    */
   addRow(cells, styleKeyOrArray, height, rowIdx) {
-    const resolve = (key, ci) => {
-      const even = (rowIdx == null || rowIdx % 2 === 0)
-      switch (key) {
-        case 'header':     return S.HEADER
-        case 'subheader':  return S.SUBHEADER
-        case 'title':      return S.TITLE
-        case 'label':      return S.LABEL
-        case 'data':       return even ? S.DATA_EVEN    : S.DATA_ODD
-        case 'data_l':     return even ? S.DATA_EVEN_L  : S.DATA_ODD_L
-        case 'val':        return even ? S.VAL_EVEN     : S.VAL_ODD
-        case 'val_l':      return even ? S.VAL_EVEN     : S.VAL_ODD
-        default:           return S.DEFAULT
-      }
-    }
-    const row = cells.map((v, ci) => {
+    this._cursor++
+    const row = this._cursor
+    this._rowHeights.set(row, height || 16)
+    cells.forEach((v, ci) => {
       const key = Array.isArray(styleKeyOrArray) ? styleKeyOrArray[ci] : styleKeyOrArray
-      return { v: v == null ? '' : v, s: resolve(key, ci) }
+      this._setCell(row, ci + 1, v, this._resolveStyle(key, rowIdx))
     })
-    this._maxCol = Math.max(this._maxCol, cells.length)
-    this._rows.push({ cells: row, h: height || 16 })
+  }
+
+  /**
+   * putRow(row, colStart, cells, styleKeyOrArray, height?)
+   * BARU: taruh 1 baris pada nomor baris & kolom-awal TERTENTU, tanpa menggeser
+   * cursor sequential addRow(). Dipakai utk layout multi-kolom/zona sejajar
+   * (mis. beberapa tabel hari berdampingan dalam 1 sheet, spt cetak Jadwal Pelajaran).
+   */
+  putRow(row, colStart, cells, styleKeyOrArray, height) {
+    if (height) this._rowHeights.set(row, height)
+    else if (!this._rowHeights.has(row)) this._rowHeights.set(row, 16)
+    cells.forEach((v, ci) => {
+      const key = Array.isArray(styleKeyOrArray) ? styleKeyOrArray[ci] : styleKeyOrArray
+      this._setCell(row, colStart + ci, v, this._resolveStyle(key, null))
+    })
   }
 
   toXml() {
-    const rowsXml = this._rows.map((row, ri) => {
-      const rNum = ri + 1
-      const cellsXml = row.cells.map((cell, ci) => {
-        const cRef = cellRef(rNum, ci + 1)
+    const rowNums = Array.from(this._cellRows.keys()).sort((a, b) => a - b)
+    const rowsXml = rowNums.map(rNum => {
+      const colMap = this._cellRows.get(rNum)
+      const colNums = Array.from(colMap.keys()).sort((a, b) => a - b)
+      const cellsXml = colNums.map(cNum => {
+        const cell = colMap.get(cNum)
+        const cRef = cellRef(rNum, cNum)
         const isNum = typeof cell.v === 'number' && isFinite(cell.v)
         if (isNum) {
           return `<c r="${cRef}" s="${cell.s}"><v>${cell.v}</v></c>`
@@ -204,7 +260,8 @@ class Sheet {
           return `<c r="${cRef}" s="${cell.s}" t="inlineStr"><is><t>${txt}</t></is></c>`
         }
       }).join('')
-      return `<row r="${rNum}" ht="${row.h}" customHeight="1">${cellsXml}</row>`
+      const h = this._rowHeights.get(rNum) || 16
+      return `<row r="${rNum}" ht="${h}" customHeight="1">${cellsXml}</row>`
     }).join('\n')
 
     const colsXml = this._widths.length
@@ -221,19 +278,26 @@ class Sheet {
       ? `<mergeCells count="${this._merges.length}">${this._merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`
       : ''
 
-    const dim = this._rows.length
-      ? `A1:${cellRef(this._rows.length, this._maxCol || 1)}`
+    const dim = this._maxRow
+      ? `A1:${cellRef(this._maxRow, this._maxCol || 1)}`
       : 'A1'
+
+    const sheetPrXml = this._printSetup?.fitToPage ? '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' : ''
+    const pageSetupXml = this._printSetup
+      ? `<pageSetup paperSize="${this._printSetup.paperSize}" scale="100" fitToWidth="1" fitToHeight="1" orientation="${this._printSetup.landscape ? 'landscape' : 'portrait'}"/>`
+      : ''
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  ${sheetPrXml}
   <dimension ref="${dim}"/>
   <sheetViews>${freezeXml}</sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
   ${colsXml}
   <sheetData>${rowsXml}</sheetData>
   ${mergeXml}
+  ${pageSetupXml}
 </worksheet>`
   }
 }
