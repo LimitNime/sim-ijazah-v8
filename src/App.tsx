@@ -26,6 +26,7 @@ import { RekapBOSPage }      from './components/pages/RekapBOSPage'
 import { PPDBPage }          from './components/pages/PPDBPage'
 import { RaportPage }        from './components/pages/RaportPage'
 import { PesertaUjianPage }  from './components/pages/PesertaUjianPage'
+import { JadwalPelajaranPage } from './components/pages/JadwalPelajaranPage'
 import { ToastContainer } from './components/ui'
 
 function AppInner() {
@@ -69,6 +70,7 @@ function AppInner() {
       case 'leger-nilai':   return <LegerNilaiPage showToast={show} />
       case 'surat':         return <SuratPage showToast={show} />
       case 'kepegawaian':   return <KepegawaianPage showToast={show} />
+      case 'jadwal-pelajaran': return <JadwalPelajaranPage showToast={show} />
       case 'kartu-ujian':   return <KartuUjianPage showToast={show} />
       case 'peserta-ujian':  return <PesertaUjianPage showToast={show} />
       case 'rekap-bos':     return <RekapBOSPage showToast={show} />
