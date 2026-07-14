@@ -274,6 +274,26 @@ function initDB() {
       ruangan TEXT
     );
 
+    -- Master pengaturan jam pelajaran per hari (jam ke berapa, mulai-selesai, tipe slot)
+    CREATE TABLE IF NOT EXISTS pengaturan_jam (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hari TEXT NOT NULL,
+      jam_ke INTEGER NOT NULL,
+      jam_mulai TEXT NOT NULL,
+      jam_selesai TEXT NOT NULL,
+      tipe TEXT NOT NULL DEFAULT 'mengajar', -- mengajar | upacara | pembiasaan | istirahat | lainnya
+      label TEXT,
+      UNIQUE(hari, jam_ke)
+    );
+
+    -- Jadwal piket harian (terpisah dari jam mengajar, dipakai di cetak jadwal lengkap)
+    CREATE TABLE IF NOT EXISTS piket_harian (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hari TEXT NOT NULL,
+      guru_id INTEGER NOT NULL,
+      urutan INTEGER DEFAULT 0
+    );
+
     CREATE TABLE IF NOT EXISTS jurnal_kelas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       kelas_id INTEGER NOT NULL,
@@ -344,6 +364,25 @@ function initDB() {
   Object.entries(newSiswaCols).forEach(([col, type]) => {
     if (!siswaCols.includes(col))
       db.prepare(`ALTER TABLE siswa ADD COLUMN ${col} ${type}`).run()
+  })
+
+  // ── Migrasi kolom untuk modul Jadwal Pelajaran (guru, jam_mengajar, jadwal_pelajaran) ──
+  const guruCols = db.prepare("PRAGMA table_info(guru)").all().map(c => c.name)
+  const newGuruCols = { hari_tersedia: 'TEXT', maks_jam_per_hari: 'INTEGER' }
+  Object.entries(newGuruCols).forEach(([col, type]) => {
+    if (!guruCols.includes(col)) db.prepare(`ALTER TABLE guru ADD COLUMN ${col} ${type}`).run()
+  })
+
+  const jamMengajarCols = db.prepare("PRAGMA table_info(jam_mengajar)").all().map(c => c.name)
+  const newJamMengajarCols = { kelas_id: 'INTEGER', mapel_id: 'INTEGER', semester: 'TEXT' }
+  Object.entries(newJamMengajarCols).forEach(([col, type]) => {
+    if (!jamMengajarCols.includes(col)) db.prepare(`ALTER TABLE jam_mengajar ADD COLUMN ${col} ${type}`).run()
+  })
+
+  const jadwalPelajaranCols = db.prepare("PRAGMA table_info(jadwal_pelajaran)").all().map(c => c.name)
+  const newJadwalPelajaranCols = { guru_id: 'INTEGER', jam_mengajar_id: 'INTEGER', blok_id: 'TEXT', semester: 'TEXT' }
+  Object.entries(newJadwalPelajaranCols).forEach(([col, type]) => {
+    if (!jadwalPelajaranCols.includes(col)) db.prepare(`ALTER TABLE jadwal_pelajaran ADD COLUMN ${col} ${type}`).run()
   })
 
   if (!db.prepare('SELECT id FROM sekolah LIMIT 1').get())
@@ -1343,11 +1382,16 @@ function registerIPC() {
   })
   ipcMain.handle('guru:get', (_, id) => db.prepare('SELECT * FROM guru WHERE id=?').get(id))
   ipcMain.handle('guru:add', (_, d) => {
-    const r = db.prepare(`INSERT INTO guru(nip,nama,jk,tempat_lahir,tgl_lahir,agama,pendidikan,jurusan,status_kepegawaian,sk_pertama,tmt_pertama,golongan,jabatan,mapel,no_hp,alamat,email,foto,tahun_masuk,keterangan) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(d.nip||'',d.nama||'',d.jk||'',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.pendidikan||'',d.jurusan||'',d.status_kepegawaian||'PNS',d.sk_pertama||'',d.tmt_pertama||'',d.golongan||'',d.jabatan||'Guru',d.mapel||'',d.no_hp||'',d.alamat||'',d.email||'',d.foto||'',d.tahun_masuk||'',d.keterangan||'')
+    const r = db.prepare(`INSERT INTO guru(nip,nama,jk,tempat_lahir,tgl_lahir,agama,pendidikan,jurusan,status_kepegawaian,sk_pertama,tmt_pertama,golongan,jabatan,mapel,no_hp,alamat,email,foto,tahun_masuk,keterangan,hari_tersedia,maks_jam_per_hari) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(d.nip||'',d.nama||'',d.jk||'',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.pendidikan||'',d.jurusan||'',d.status_kepegawaian||'PNS',d.sk_pertama||'',d.tmt_pertama||'',d.golongan||'',d.jabatan||'Guru',d.mapel||'',d.no_hp||'',d.alamat||'',d.email||'',d.foto||'',d.tahun_masuk||'',d.keterangan||'',d.hari_tersedia||'',d.maks_jam_per_hari||null)
     return { ok: true, id: r.lastInsertRowid }
   })
   ipcMain.handle('guru:update', (_, id, d) => {
-    db.prepare(`UPDATE guru SET nip=?,nama=?,jk=?,tempat_lahir=?,tgl_lahir=?,agama=?,pendidikan=?,jurusan=?,status_kepegawaian=?,sk_pertama=?,tmt_pertama=?,golongan=?,jabatan=?,mapel=?,no_hp=?,alamat=?,email=?,tahun_masuk=?,keterangan=? WHERE id=?`).run(d.nip||'',d.nama||'',d.jk||'',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.pendidikan||'',d.jurusan||'',d.status_kepegawaian||'PNS',d.sk_pertama||'',d.tmt_pertama||'',d.golongan||'',d.jabatan||'Guru',d.mapel||'',d.no_hp||'',d.alamat||'',d.email||'',d.tahun_masuk||'',d.keterangan||'',id)
+    db.prepare(`UPDATE guru SET nip=?,nama=?,jk=?,tempat_lahir=?,tgl_lahir=?,agama=?,pendidikan=?,jurusan=?,status_kepegawaian=?,sk_pertama=?,tmt_pertama=?,golongan=?,jabatan=?,mapel=?,no_hp=?,alamat=?,email=?,tahun_masuk=?,keterangan=?,hari_tersedia=?,maks_jam_per_hari=? WHERE id=?`).run(d.nip||'',d.nama||'',d.jk||'',d.tempat_lahir||'',d.tgl_lahir||'',d.agama||'Islam',d.pendidikan||'',d.jurusan||'',d.status_kepegawaian||'PNS',d.sk_pertama||'',d.tmt_pertama||'',d.golongan||'',d.jabatan||'Guru',d.mapel||'',d.no_hp||'',d.alamat||'',d.email||'',d.tahun_masuk||'',d.keterangan||'',d.hari_tersedia||'',d.maks_jam_per_hari||null,id)
+    return { ok: true }
+  })
+  // Update ringan khusus utk field ketersediaan (dipakai dari modul Jadwal Pelajaran, tanpa perlu kirim semua field guru)
+  ipcMain.handle('guru:update_ketersediaan', (_, id, d) => {
+    db.prepare('UPDATE guru SET hari_tersedia=?, maks_jam_per_hari=? WHERE id=?').run(d.hari_tersedia||'', d.maks_jam_per_hari||null, id)
     return { ok: true }
   })
   ipcMain.handle('guru:delete', (_, id) => { db.prepare('DELETE FROM guru WHERE id=?').run(id); return { ok: true } })
@@ -1390,18 +1434,715 @@ function registerIPC() {
 
   // ── JAM MENGAJAR ──────────────────────────────────────────────────────────
   ipcMain.handle('jam_mengajar:list', (_, tahun_ajaran) => {
-    if (tahun_ajaran) return db.prepare('SELECT j.*,g.nama as nama_guru FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id WHERE j.tahun_ajaran=? ORDER BY g.nama').all(tahun_ajaran)
-    return db.prepare('SELECT j.*,g.nama as nama_guru FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id ORDER BY g.nama').all()
+    const base = `
+      SELECT j.*, g.nama as nama_guru, k.nama as nama_kelas_master, m.nama as nama_mapel_master,
+        COALESCE((SELECT COUNT(*) FROM jadwal_pelajaran jp WHERE jp.jam_mengajar_id = j.id), 0) as terjadwal
+      FROM jam_mengajar j
+      LEFT JOIN guru g ON g.id = j.guru_id
+      LEFT JOIN kelas k ON k.id = j.kelas_id
+      LEFT JOIN mapel m ON m.id = j.mapel_id
+    `
+    const rows = tahun_ajaran
+      ? db.prepare(base + ' WHERE j.tahun_ajaran=? ORDER BY g.nama').all(tahun_ajaran)
+      : db.prepare(base + ' ORDER BY g.nama').all()
+    return rows.map(r => ({
+      ...r,
+      mapel: r.nama_mapel_master || r.mapel || '',
+      kelas: r.nama_kelas_master || r.kelas || '',
+      sisa: Math.max(0, (r.jumlah_jam || 0) - (r.terjadwal || 0)),
+    }))
   })
   ipcMain.handle('jam_mengajar:save', (_, d) => {
+    let mapelText = d.mapel || '', kelasText = d.kelas || ''
+    if (d.mapel_id) { const m = db.prepare('SELECT nama FROM mapel WHERE id=?').get(d.mapel_id); if (m) mapelText = m.nama }
+    if (d.kelas_id) { const k = db.prepare('SELECT nama FROM kelas WHERE id=?').get(d.kelas_id); if (k) kelasText = k.nama }
     if (d.id) {
-      db.prepare('UPDATE jam_mengajar SET guru_id=?,mapel=?,kelas=?,jumlah_jam=?,tahun_ajaran=? WHERE id=?').run(d.guru_id,d.mapel||'',d.kelas||'',d.jumlah_jam||0,d.tahun_ajaran||'',d.id)
+      db.prepare('UPDATE jam_mengajar SET guru_id=?,mapel=?,kelas=?,jumlah_jam=?,tahun_ajaran=?,kelas_id=?,mapel_id=?,semester=? WHERE id=?')
+        .run(d.guru_id,mapelText,kelasText,d.jumlah_jam||0,d.tahun_ajaran||'',d.kelas_id||null,d.mapel_id||null,d.semester||'',d.id)
     } else {
-      db.prepare('INSERT INTO jam_mengajar(guru_id,mapel,kelas,jumlah_jam,tahun_ajaran) VALUES(?,?,?,?,?)').run(d.guru_id,d.mapel||'',d.kelas||'',d.jumlah_jam||0,d.tahun_ajaran||'')
+      db.prepare('INSERT INTO jam_mengajar(guru_id,mapel,kelas,jumlah_jam,tahun_ajaran,kelas_id,mapel_id,semester) VALUES(?,?,?,?,?,?,?,?)')
+        .run(d.guru_id,mapelText,kelasText,d.jumlah_jam||0,d.tahun_ajaran||'',d.kelas_id||null,d.mapel_id||null,d.semester||'')
     }
     return { ok: true }
   })
-  ipcMain.handle('jam_mengajar:delete', (_, id) => { db.prepare('DELETE FROM jam_mengajar WHERE id=?').run(id); return { ok: true } })
+  ipcMain.handle('jam_mengajar:delete', (_, id) => {
+    db.prepare('DELETE FROM jadwal_pelajaran WHERE jam_mengajar_id=?').run(id)
+    db.prepare('DELETE FROM jam_mengajar WHERE id=?').run(id)
+    return { ok: true }
+  })
+
+  // ── PENGATURAN JAM PELAJARAN (master jam per hari) ──────────────────────
+  const hariCase = (col) => `CASE ${col} WHEN 'Senin' THEN 1 WHEN 'Selasa' THEN 2 WHEN 'Rabu' THEN 3 WHEN 'Kamis' THEN 4 WHEN 'Jumat' THEN 5 WHEN 'Sabtu' THEN 6 ELSE 7 END`
+  const getPengaturanJamHari = (hari) => db.prepare('SELECT * FROM pengaturan_jam WHERE hari=? ORDER BY jam_ke').all(hari)
+
+  // Urutan tingkat yang benar (VII, VIII, IX, ...) — bukan alfabetis (yg akan salah urut jadi IX, VII, VIII)
+  const TINGKAT_URUT = { VII: 7, VIII: 8, IX: 9, X: 10, XI: 11, XII: 12 }
+  function sortKelasByTingkat(list) {
+    return [...list].sort((a, b) => {
+      const ta = TINGKAT_URUT[a.tingkat] || 999, tb = TINGKAT_URUT[b.tingkat] || 999
+      if (ta !== tb) return ta - tb
+      return String(a.nama).localeCompare(String(b.nama))
+    })
+  }
+
+  ipcMain.handle('pengaturan_jam:list', () => db.prepare(`SELECT * FROM pengaturan_jam ORDER BY ${hariCase('hari')}, jam_ke`).all())
+
+  ipcMain.handle('pengaturan_jam:save_hari', (_, hari, rows) => {
+    const del = db.prepare('DELETE FROM pengaturan_jam WHERE hari=?')
+    const ins = db.prepare('INSERT INTO pengaturan_jam(hari,jam_ke,jam_mulai,jam_selesai,tipe,label) VALUES(?,?,?,?,?,?)')
+    const tx = db.transaction(() => {
+      del.run(hari)
+      rows.forEach((r, i) => ins.run(hari, i + 1, r.jam_mulai || '', r.jam_selesai || '', r.tipe || 'mengajar', r.label || ''))
+    })
+    tx()
+    return { ok: true }
+  })
+
+  ipcMain.handle('pengaturan_jam:copy_hari', (_, dariHari, keHariList) => {
+    const rows = db.prepare('SELECT * FROM pengaturan_jam WHERE hari=? ORDER BY jam_ke').all(dariHari)
+    if (rows.length === 0) return { ok: false, error: `Hari ${dariHari} belum punya pengaturan jam.` }
+    const del = db.prepare('DELETE FROM pengaturan_jam WHERE hari=?')
+    const ins = db.prepare('INSERT INTO pengaturan_jam(hari,jam_ke,jam_mulai,jam_selesai,tipe,label) VALUES(?,?,?,?,?,?)')
+    const tx = db.transaction(() => {
+      for (const keHari of keHariList) {
+        del.run(keHari)
+        rows.forEach(r => ins.run(keHari, r.jam_ke, r.jam_mulai, r.jam_selesai, r.tipe, r.label || ''))
+      }
+    })
+    tx()
+    return { ok: true }
+  })
+
+  ipcMain.handle('pengaturan_jam:seed_contoh', () => {
+    // Contoh awal (bisa langsung diubah bebas) — mengikuti pola umum SMP 6 hari kerja
+    const CONTOH = {
+      Senin:  [['07.00','07.30','upacara','Upacara'],['07.30','08.00','mengajar',''],['08.00','08.30','mengajar',''],['08.30','09.00','mengajar',''],['09.00','09.30','mengajar',''],['09.30','10.00','mengajar',''],['10.00','10.30','istirahat','Istirahat'],['10.30','11.00','mengajar',''],['11.00','11.30','mengajar',''],['11.30','12.00','mengajar','']],
+      Selasa: [['07.00','07.30','pembiasaan','Pembiasaan'],['07.30','08.00','mengajar',''],['08.00','08.30','mengajar',''],['08.30','09.00','mengajar',''],['09.00','09.30','mengajar',''],['09.30','10.00','mengajar',''],['10.00','10.30','istirahat','Istirahat'],['10.30','11.00','mengajar',''],['11.00','11.30','mengajar',''],['11.30','12.00','mengajar',''],['12.00','12.30','mengajar','']],
+      Rabu:   [['07.00','07.30','pembiasaan','Pembiasaan'],['07.30','08.00','mengajar',''],['08.00','08.30','mengajar',''],['08.30','09.00','mengajar',''],['09.00','09.30','mengajar',''],['09.30','10.00','mengajar',''],['10.00','10.30','istirahat','Istirahat'],['10.30','11.00','mengajar',''],['11.00','11.30','mengajar',''],['11.30','12.00','mengajar',''],['12.00','12.30','mengajar','']],
+      Kamis:  [['07.00','07.30','pembiasaan','Pembiasaan'],['07.30','08.00','mengajar',''],['08.00','08.30','mengajar',''],['08.30','09.00','mengajar',''],['09.00','09.30','mengajar',''],['09.30','10.00','mengajar',''],['10.00','10.30','istirahat','Istirahat'],['10.30','11.00','mengajar',''],['11.00','11.30','mengajar',''],['11.30','12.00','mengajar','']],
+      Jumat:  [['07.00','07.30','pembiasaan','Pembiasaan'],['07.30','08.00','mengajar',''],['08.00','08.30','mengajar',''],['08.30','09.00','mengajar',''],['09.00','09.30','mengajar',''],['09.30','10.00','mengajar',''],['10.00','10.30','mengajar','']],
+      Sabtu:  [['07.00','07.30','pembiasaan','Pembiasaan'],['07.30','08.00','mengajar',''],['08.00','08.30','mengajar',''],['08.30','09.00','mengajar',''],['09.00','09.30','mengajar',''],['09.30','10.00','istirahat','Istirahat'],['10.00','10.30','mengajar',''],['10.30','11.00','mengajar',''],['11.00','11.30','mengajar','']],
+    }
+    const del = db.prepare('DELETE FROM pengaturan_jam WHERE hari=?')
+    const ins = db.prepare('INSERT INTO pengaturan_jam(hari,jam_ke,jam_mulai,jam_selesai,tipe,label) VALUES(?,?,?,?,?,?)')
+    const tx = db.transaction(() => {
+      Object.entries(CONTOH).forEach(([hari, rows]) => {
+        del.run(hari)
+        rows.forEach((r, i) => ins.run(hari, i + 1, r[0], r[1], r[2], r[3] || ''))
+      })
+    })
+    tx()
+    return { ok: true }
+  })
+
+  // ── JADWAL PELAJARAN: SUSUN, CEK TABRAKAN, REKOMENDASI, ANALISIS BEBAN ──
+  ipcMain.handle('jadwal_pelajaran:get_by_kelas', (_, kelas_id) => {
+    return db.prepare(`
+      SELECT jp.*, g.nama as nama_guru
+      FROM jadwal_pelajaran jp LEFT JOIN guru g ON g.id = jp.guru_id
+      WHERE jp.kelas_id=? ORDER BY ${hariCase('jp.hari')}, jp.jam_ke
+    `).all(kelas_id)
+  })
+
+  ipcMain.handle('jadwal_pelajaran:kuota_guru', (_, guru_id) => {
+    return db.prepare(`
+      SELECT j.*, COALESCE((SELECT COUNT(*) FROM jadwal_pelajaran jp WHERE jp.jam_mengajar_id=j.id),0) as terjadwal
+      FROM jam_mengajar j WHERE j.guru_id=? ORDER BY j.mapel
+    `).all(guru_id).map(r => ({ ...r, sisa: Math.max(0, (r.jumlah_jam || 0) - (r.terjadwal || 0)) }))
+  })
+
+  function validasiBlok(d) {
+    const durasi = Number(d.durasi) || 0
+    if (durasi < 1 || durasi > 3) return { ok: false, error: 'Durasi harus antara 1–3 JP (maksimal 3 jam mapel yang sama di kelas yang sama per hari).' }
+    if (!d.kelas_id || !d.guru_id || !d.hari || !d.mulai_jam_ke) return { ok: false, error: 'Data belum lengkap (kelas, guru, hari, atau jam mulai kosong).' }
+
+    const jamHari = getPengaturanJamHari(d.hari)
+    if (jamHari.length === 0) return { ok: false, error: `Belum ada pengaturan jam untuk hari ${d.hari}. Atur dulu di tab Pengaturan Jam.` }
+
+    const mulai = Number(d.mulai_jam_ke)
+    const targetJamKe = Array.from({ length: durasi }, (_, i) => mulai + i)
+    const inPlaceholders = targetJamKe.map(() => '?').join(',')
+
+    for (const jk of targetJamKe) {
+      const slot = jamHari.find(j => j.jam_ke === jk)
+      if (!slot) return { ok: false, error: `Jam ke-${jk} tidak ada dalam pengaturan jam hari ${d.hari}.` }
+      if (slot.tipe !== 'mengajar') return { ok: false, error: `Jam ke-${jk} adalah slot "${slot.label || slot.tipe}", bukan slot mengajar.` }
+    }
+
+    const existingKelas = db.prepare(`SELECT jam_ke, nama_mapel FROM jadwal_pelajaran WHERE kelas_id=? AND hari=? AND jam_ke IN (${inPlaceholders})`).all(d.kelas_id, d.hari, ...targetJamKe)
+    if (existingKelas.length > 0) {
+      return { ok: false, error: `Kelas sudah ada pelajaran "${existingKelas[0].nama_mapel || '-'}" di jam ke-${existingKelas[0].jam_ke} hari ${d.hari}.`, conflict: 'kelas' }
+    }
+
+    const guruRow = db.prepare('SELECT * FROM guru WHERE id=?').get(d.guru_id)
+    const existingGuru = db.prepare(`
+      SELECT jp.jam_ke, jp.nama_mapel, k.nama as nama_kelas FROM jadwal_pelajaran jp
+      LEFT JOIN kelas k ON k.id = jp.kelas_id
+      WHERE jp.guru_id=? AND jp.hari=? AND jp.jam_ke IN (${inPlaceholders})
+    `).all(d.guru_id, d.hari, ...targetJamKe)
+    if (existingGuru.length > 0) {
+      const g = existingGuru[0]
+      return { ok: false, error: `${guruRow?.nama || 'Guru'} sudah mengajar kelas ${g.nama_kelas || '-'} (${g.nama_mapel || '-'}) di jam ke-${g.jam_ke} hari ${d.hari}.`, conflict: 'guru' }
+    }
+
+    if (guruRow?.hari_tersedia) {
+      const hariList = guruRow.hari_tersedia.split(',').map(s => s.trim()).filter(Boolean)
+      if (hariList.length > 0 && !hariList.includes(d.hari)) {
+        return { ok: false, error: `${guruRow.nama} tidak tersedia hari ${d.hari} (hari tersedia: ${hariList.join(', ')}).`, conflict: 'hari_tersedia' }
+      }
+    }
+
+    if (guruRow?.maks_jam_per_hari) {
+      const totalHariIni = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE guru_id=? AND hari=?').get(d.guru_id, d.hari).c
+      if (totalHariIni + durasi > guruRow.maks_jam_per_hari) {
+        return { ok: false, error: `${guruRow.nama} sudah dijadwalkan ${totalHariIni} JP hari ${d.hari} (maks ${guruRow.maks_jam_per_hari} JP/hari).`, conflict: 'maks_jam_guru' }
+      }
+    }
+
+    if (d.jam_mengajar_id) {
+      const totalMapelHariIni = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE jam_mengajar_id=? AND hari=?').get(d.jam_mengajar_id, d.hari).c
+      if (totalMapelHariIni + durasi > 3) {
+        return { ok: false, error: `Maksimal 3 JP untuk mapel yang sama di kelas yang sama per hari (sudah ${totalMapelHariIni} JP hari ${d.hari}).`, conflict: 'maks_mapel_harian' }
+      }
+      const km = db.prepare('SELECT * FROM jam_mengajar WHERE id=?').get(d.jam_mengajar_id)
+      if (km) {
+        const sudahTerjadwal = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE jam_mengajar_id=?').get(d.jam_mengajar_id).c
+        if (sudahTerjadwal + durasi > km.jumlah_jam) {
+          return { ok: false, error: `Melebihi kuota. Sisa kuota ${km.mapel} di kelas ${km.kelas} hanya ${km.jumlah_jam - sudahTerjadwal} JP.`, conflict: 'kuota' }
+        }
+      }
+    }
+
+    return { ok: true, jamHari, targetJamKe, guruRow }
+  }
+
+  // Insert murni (asumsi sudah lolos validasiBlok) — TIDAK membuka transaksi sendiri,
+  // supaya pemanggilnya (tambahBlokInternal / editBlokInternal) bebas membungkus dg transaksi masing-masing
+  // tanpa risiko transaksi bersarang.
+  function insertBlokRows(d, ctx) {
+    const blokId = `blok_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const ins = db.prepare('INSERT INTO jadwal_pelajaran(kelas_id,hari,jam_ke,jam_mulai,jam_selesai,mapel_id,nama_mapel,guru,guru_id,ruangan,jam_mengajar_id,blok_id,semester) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const jk of ctx.targetJamKe) {
+      const slot = ctx.jamHari.find(j => j.jam_ke === jk)
+      ins.run(d.kelas_id, d.hari, jk, slot.jam_mulai, slot.jam_selesai, d.mapel_id || null, d.nama_mapel || '', ctx.guruRow?.nama || '', d.guru_id, d.ruangan || '', d.jam_mengajar_id || null, blokId, d.semester || '')
+    }
+    return blokId
+  }
+
+  function tambahBlokInternal(d) {
+    const v = validasiBlok(d)
+    if (!v.ok) return v
+    let blokId
+    const tx = db.transaction(() => { blokId = insertBlokRows(d, v) })
+    tx()
+    return { ok: true, blok_id: blokId, jam_ke: v.targetJamKe }
+  }
+  ipcMain.handle('jadwal_pelajaran:add_blok', (_, d) => tambahBlokInternal(d))
+
+  // Edit blok yang sudah ada: hapus dulu barisnya, coba tempatkan versi baru (validasi lengkap sama seperti tambah),
+  // kalau gagal otomatis rollback (baris lama balik utuh) — jadi gak pernah kehilangan data walau edit-nya invalid.
+  function editBlokInternal(d) {
+    if (!d.blok_id) return { ok: false, error: 'blok_id wajib diisi.' }
+    const oldRows = db.prepare('SELECT * FROM jadwal_pelajaran WHERE blok_id=?').all(d.blok_id)
+    if (oldRows.length === 0) return { ok: false, error: 'Blok tidak ditemukan (mungkin sudah dihapus/diubah).' }
+
+    let hasil = null
+    try {
+      const tx = db.transaction(() => {
+        db.prepare('DELETE FROM jadwal_pelajaran WHERE blok_id=?').run(d.blok_id)
+        const v = validasiBlok(d)
+        if (!v.ok) { hasil = v; throw new Error('__ROLLBACK_VALIDASI__') }
+        const blokId = insertBlokRows(d, v)
+        hasil = { ok: true, blok_id: blokId, jam_ke: v.targetJamKe }
+      })
+      tx()
+    } catch (e) {
+      if (e.message !== '__ROLLBACK_VALIDASI__') throw e
+      // sudah di-rollback otomatis oleh db.transaction (baris lama balik utuh); `hasil` tetap berisi objek error utk dikembalikan ke UI
+    }
+    return hasil
+  }
+  ipcMain.handle('jadwal_pelajaran:edit_blok', (_, d) => editBlokInternal(d))
+
+  ipcMain.handle('jadwal_pelajaran:hapus_blok', (_, blok_id) => { db.prepare('DELETE FROM jadwal_pelajaran WHERE blok_id=?').run(blok_id); return { ok: true } })
+  ipcMain.handle('jadwal_pelajaran:hapus_satu', (_, id) => { db.prepare('DELETE FROM jadwal_pelajaran WHERE id=?').run(id); return { ok: true } })
+
+  // ── GENERATE OTOMATIS: taruh semua sisa kuota ke jadwal, hindari tabrakan ──
+  ipcMain.handle('jadwal_pelajaran:generate_otomatis', (_, opts) => {
+    const kelasFilter = opts?.kelas_id || null
+    const reset = !!opts?.reset
+    const HARI6LOCAL = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+
+    if (reset) {
+      if (kelasFilter) db.prepare('DELETE FROM jadwal_pelajaran WHERE kelas_id=? AND jam_mengajar_id IS NOT NULL').run(kelasFilter)
+      else db.prepare('DELETE FROM jadwal_pelajaran WHERE jam_mengajar_id IS NOT NULL').run()
+    }
+
+    const kelasScope = kelasFilter
+      ? sortKelasByTingkat(db.prepare('SELECT * FROM kelas WHERE id=?').all(kelasFilter))
+      : sortKelasByTingkat(db.prepare('SELECT * FROM kelas').all())
+
+    function ambilKuotaRows() {
+      let rows = db.prepare(`
+        SELECT j.*, g.nama as nama_guru, g.hari_tersedia, g.maks_jam_per_hari,
+          COALESCE((SELECT COUNT(*) FROM jadwal_pelajaran jp WHERE jp.jam_mengajar_id=j.id),0) as terjadwal
+        FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id
+        WHERE j.kelas_id IS NOT NULL AND j.guru_id IS NOT NULL
+      `).all()
+      if (kelasFilter) rows = rows.filter(k => k.kelas_id === kelasFilter)
+      return rows.map(k => ({ ...k, sisa: Math.max(0, (k.jumlah_jam || 0) - (k.terjadwal || 0)) })).filter(k => k.sisa > 0)
+    }
+
+    function hitungSlotKosong() {
+      const slotKosong = []
+      let totalKosong = 0
+      for (const kls of kelasScope) {
+        let kosong = 0
+        for (const hari of HARI6LOCAL) {
+          const jamHari = getPengaturanJamHari(hari).filter(j => j.tipe === 'mengajar')
+          for (const slot of jamHari) {
+            const ada = db.prepare('SELECT id FROM jadwal_pelajaran WHERE kelas_id=? AND hari=? AND jam_ke=?').get(kls.id, hari, slot.jam_ke)
+            if (!ada) kosong++
+          }
+        }
+        if (kosong > 0) slotKosong.push({ kelas: kls.nama, jumlah_kosong: kosong })
+        totalKosong += kosong
+      }
+      return { slotKosong, totalKosong }
+    }
+
+    function hapusBlokList(blokIds) {
+      if (!blokIds || blokIds.length === 0) return
+      const placeholders = blokIds.map(() => '?').join(',')
+      db.prepare(`DELETE FROM jadwal_pelajaran WHERE blok_id IN (${placeholders})`).run(...blokIds)
+    }
+
+    const jumlahHariTersedia = (k) => k.hari_tersedia ? (k.hari_tersedia.split(',').map(s => s.trim()).filter(Boolean).length || 6) : 6
+    const bebanGuruHari = (guru_id, hari) => db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE guru_id=? AND hari=?').get(guru_id, hari).c
+
+    function shuffle(arr) {
+      const a = [...arr]
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const tmp = a[i]; a[i] = a[j]; a[j] = tmp
+      }
+      return a
+    }
+
+    const sortDeterministik = (rows) => [...rows].sort((a, b) => {
+      const diffHari = jumlahHariTersedia(a) - jumlahHariTersedia(b)
+      if (diffHari !== 0) return diffHari
+      return b.sisa - a.sisa
+    })
+
+    // Jalankan 1x percobaan penuh (pass 1: penempatan blok per-guru + pass 2: tambal lubang tersisa).
+    // Semua blok baru yg tercipta selama percobaan ini dicatat blok_id-nya (blokIdsBaru), supaya
+    // kalau percobaan ini bukan yg terbaik, HANYA baris-baris ini yg dihapus sebelum percobaan
+    // berikutnya — baseline (data sebelum handler ini dipanggil) tidak pernah ikut terhapus.
+    function jalankanSatuPercobaan(kuotaRowsSorted) {
+      const berhasil = []
+      const blokIdsBaru = []
+
+      for (const k of kuotaRowsSorted) {
+        const hariAvail = k.hari_tersedia ? k.hari_tersedia.split(',').map(s => s.trim()).filter(Boolean) : HARI6LOCAL
+        const validHariAvail = hariAvail.length > 0 ? hariAvail : HARI6LOCAL
+        const maxChunkBase = validHariAvail.length <= 2 ? 3 : 2
+        let sisa = k.sisa
+        while (sisa > 0) {
+          let placed = false
+          for (let chunk = Math.min(maxChunkBase, sisa); chunk >= 1 && !placed; chunk--) {
+            const hariSorted = [...validHariAvail].sort((h1, h2) => bebanGuruHari(k.guru_id, h1) - bebanGuruHari(k.guru_id, h2))
+            for (const hari of hariSorted) {
+              if (placed) break
+              const jamHari = getPengaturanJamHari(hari)
+              const slotMengajar = jamHari.filter(j => j.tipe === 'mengajar')
+              for (const startSlot of slotMengajar) {
+                const targetJamKe = Array.from({ length: chunk }, (_, i) => startSlot.jam_ke + i)
+                const rangeOk = targetJamKe.every(jk => jamHari.find(j => j.jam_ke === jk && j.tipe === 'mengajar'))
+                if (!rangeOk) continue
+                const hasil = tambahBlokInternal({ kelas_id: k.kelas_id, hari, mulai_jam_ke: startSlot.jam_ke, durasi: chunk, guru_id: k.guru_id, mapel_id: k.mapel_id, nama_mapel: k.mapel, jam_mengajar_id: k.id, semester: k.semester })
+                if (hasil.ok) {
+                  berhasil.push({ guru: k.nama_guru, mapel: k.mapel, kelas: k.kelas, hari, jam: chunk })
+                  blokIdsBaru.push(hasil.blok_id)
+                  sisa -= chunk; placed = true; break
+                }
+              }
+            }
+          }
+          if (!placed) break
+        }
+      }
+
+      let tambahanGapFill = 0
+      for (let iterasi = 0; iterasi < 6; iterasi++) {
+        let progressIterasiIni = 0
+        for (const kls of kelasScope) {
+          for (const hari of HARI6LOCAL) {
+            const jamHari = getPengaturanJamHari(hari).filter(j => j.tipe === 'mengajar')
+            for (const slot of jamHari) {
+              const sudahAda = db.prepare('SELECT id FROM jadwal_pelajaran WHERE kelas_id=? AND hari=? AND jam_ke=?').get(kls.id, hari, slot.jam_ke)
+              if (sudahAda) continue
+              const kandidat = db.prepare(`
+                SELECT j.*, g.nama as nama_guru,
+                  COALESCE((SELECT COUNT(*) FROM jadwal_pelajaran jp WHERE jp.jam_mengajar_id=j.id),0) as terjadwal
+                FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id
+                WHERE j.kelas_id=? AND j.guru_id IS NOT NULL
+              `).all(kls.id).map(k => ({ ...k, sisa: (k.jumlah_jam || 0) - (k.terjadwal || 0) }))
+                .filter(k => k.sisa > 0).sort((a, b) => b.sisa - a.sisa)
+              for (const k of kandidat) {
+                const hasil = tambahBlokInternal({ kelas_id: kls.id, hari, mulai_jam_ke: slot.jam_ke, durasi: 1, guru_id: k.guru_id, mapel_id: k.mapel_id, nama_mapel: k.mapel, jam_mengajar_id: k.id, semester: k.semester })
+                if (hasil.ok) {
+                  berhasil.push({ guru: k.nama_guru, mapel: k.mapel, kelas: k.kelas, hari, jam: 1 })
+                  blokIdsBaru.push(hasil.blok_id)
+                  tambahanGapFill++; progressIterasiIni++
+                  break
+                }
+              }
+            }
+          }
+        }
+        if (progressIterasiIni === 0) break
+      }
+
+      return { berhasil, tambahanGapFill, blokIdsBaru }
+    }
+
+    // ── Multi-attempt: urutan deterministik dulu, lalu beberapa percobaan dg urutan acak
+    //    (di antara kuota yg prioritasnya sama) — simpan & pakai hasil paling penuh (paling sedikit
+    //    slot kosong). Ini bin-packing NP-hard, jadi gak ada jaminan matematis 100% penuh untuk
+    //    SEMUA kemungkinan data, tapi percobaan berulang ini terbukti signifikan mengurangi lubang. ──
+    const baseRows = ambilKuotaRows()
+    const MAX_PERCOBAAN = 8
+    let terbaik = null
+    let terbaikIdx = -1
+    let blokIdsPercobaanTerakhir = []
+
+    for (let percobaan = 0; percobaan < MAX_PERCOBAAN; percobaan++) {
+      hapusBlokList(blokIdsPercobaanTerakhir) // bersihkan HANYA punya percobaan sebelumnya, baseline aman
+      const urutan = percobaan === 0 ? sortDeterministik(baseRows) : sortDeterministik(shuffle(baseRows))
+      const { berhasil, tambahanGapFill, blokIdsBaru } = jalankanSatuPercobaan(urutan)
+      const { slotKosong, totalKosong } = hitungSlotKosong()
+      if (!terbaik || totalKosong < terbaik.totalKosong) {
+        terbaik = { berhasil, tambahanGapFill, totalKosong, slotKosong, urutan }
+        terbaikIdx = percobaan
+      }
+      blokIdsPercobaanTerakhir = blokIdsBaru
+      if (totalKosong === 0) break
+    }
+
+    if (terbaikIdx !== MAX_PERCOBAAN - 1 && terbaik.totalKosong > 0) {
+      // percobaan terakhir (state DB saat ini) bukan yg terbaik -> bersihkan, ulang pakai urutan terbaik
+      hapusBlokList(blokIdsPercobaanTerakhir)
+      const ulang = jalankanSatuPercobaan(terbaik.urutan)
+      terbaik.berhasil = ulang.berhasil
+      terbaik.tambahanGapFill = ulang.tambahanGapFill
+    }
+
+    const gagalFinal = []
+    const kuotaSisaAkhir = db.prepare(`
+      SELECT j.*, g.nama as nama_guru, COALESCE((SELECT COUNT(*) FROM jadwal_pelajaran jp WHERE jp.jam_mengajar_id=j.id),0) as terjadwal
+      FROM jam_mengajar j LEFT JOIN guru g ON g.id=j.guru_id WHERE j.kelas_id IS NOT NULL AND j.guru_id IS NOT NULL
+    `).all().filter(k => !kelasFilter || k.kelas_id === kelasFilter)
+    kuotaSisaAkhir.forEach(k => {
+      const sisaAkhir = (k.jumlah_jam || 0) - (k.terjadwal || 0)
+      if (sisaAkhir > 0) gagalFinal.push({ guru: k.nama_guru, mapel: k.mapel, kelas: k.kelas, kurang: sisaAkhir })
+    })
+
+    return { ok: true, jumlah_berhasil: terbaik.berhasil.reduce((a, b) => a + b.jam, 0), jumlah_blok: terbaik.berhasil.length, gap_fill: terbaik.tambahanGapFill, gagal: gagalFinal, slot_kosong: terbaik.slotKosong }
+  })
+
+
+
+  ipcMain.handle('jadwal_pelajaran:rekomendasi_hari', (_, params) => {
+    const durasi = Number(params.durasi) || 1
+    const guruRow = db.prepare('SELECT * FROM guru WHERE id=?').get(params.guru_id)
+    if (!guruRow) return []
+    const hariSemua = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+    const hariAvail = guruRow.hari_tersedia
+      ? guruRow.hari_tersedia.split(',').map(s => s.trim()).filter(Boolean)
+      : hariSemua
+
+    const hasil = []
+    for (const hari of hariAvail) {
+      const jamHari = getPengaturanJamHari(hari)
+      const slotMengajar = jamHari.filter(j => j.tipe === 'mengajar')
+      for (const startSlot of slotMengajar) {
+        const mulai = startSlot.jam_ke
+        const targetJamKe = Array.from({ length: durasi }, (_, i) => mulai + i)
+        const rangeOk = targetJamKe.every(jk => jamHari.find(j => j.jam_ke === jk && j.tipe === 'mengajar'))
+        if (!rangeOk) continue
+        const inPlaceholders = targetJamKe.map(() => '?').join(',')
+        const bentrokGuru = db.prepare(`SELECT COUNT(*) c FROM jadwal_pelajaran WHERE guru_id=? AND hari=? AND jam_ke IN (${inPlaceholders})`).get(params.guru_id, hari, ...targetJamKe).c
+        if (bentrokGuru > 0) continue
+        if (guruRow.maks_jam_per_hari) {
+          const totalHariIni = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE guru_id=? AND hari=?').get(params.guru_id, hari).c
+          if (totalHariIni + durasi > guruRow.maks_jam_per_hari) continue
+        }
+        if (params.jam_mengajar_id) {
+          const totalMapelHariIni = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE jam_mengajar_id=? AND hari=?').get(params.jam_mengajar_id, hari).c
+          if (totalMapelHariIni + durasi > 3) continue
+        }
+        hasil.push({ hari, mulai_jam_ke: mulai, jam_mulai: startSlot.jam_mulai, jam_selesai: jamHari.find(j=>j.jam_ke===mulai+durasi-1)?.jam_selesai })
+        break
+      }
+      if (hasil.length >= 6) break
+    }
+    return hasil
+  })
+
+  ipcMain.handle('jadwal_pelajaran:workload', () => {
+    const guruList = db.prepare('SELECT * FROM guru ORDER BY nama').all()
+    return guruList.map(g => {
+      const target = db.prepare('SELECT COALESCE(SUM(jumlah_jam),0) t FROM jam_mengajar WHERE guru_id=?').get(g.id).t
+      const aktual = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE guru_id=?').get(g.id).c
+      return { guru_id: g.id, nama_guru: g.nama, hari_tersedia: g.hari_tersedia || '', maks_jam_per_hari: g.maks_jam_per_hari || null, target_jam: target, aktual_terjadwal: aktual, selisih: target - aktual }
+    }).filter(r => r.target_jam > 0)
+  })
+
+  ipcMain.handle('jadwal_pelajaran:matrix_hari', (_, hari) => {
+    const kelasList = sortKelasByTingkat(db.prepare('SELECT * FROM kelas').all())
+    const jamHari = getPengaturanJamHari(hari)
+    const isi = db.prepare(`
+      SELECT jp.*, g.nama as nama_guru FROM jadwal_pelajaran jp
+      LEFT JOIN guru g ON g.id = jp.guru_id WHERE jp.hari=?
+    `).all(hari)
+    return { kelas: kelasList, jam: jamHari, isi }
+  })
+
+  // ── PIKET HARIAN ──────────────────────────────────────────────────────────
+  ipcMain.handle('piket:list', () => {
+    return db.prepare(`
+      SELECT p.*, g.nama as nama_guru FROM piket_harian p
+      LEFT JOIN guru g ON g.id = p.guru_id ORDER BY ${hariCase('p.hari')}, p.urutan
+    `).all()
+  })
+  ipcMain.handle('piket:save_hari', (_, hari, guru_ids) => {
+    const del = db.prepare('DELETE FROM piket_harian WHERE hari=?')
+    const ins = db.prepare('INSERT INTO piket_harian(hari,guru_id,urutan) VALUES(?,?,?)')
+    const tx = db.transaction(() => {
+      del.run(hari)
+      guru_ids.forEach((gid, i) => ins.run(hari, gid, i))
+    })
+    tx()
+    return { ok: true }
+  })
+
+  // ── Kode & warna guru dipakai export (1 guru = 1 warna, suffix a/b/c kalau ngajar >1 mapel) ──
+  function buildKodeGuruMap() {
+    const pairs = db.prepare(`
+      SELECT DISTINCT jp.guru_id, jp.nama_mapel, g.nama as nama_guru
+      FROM jadwal_pelajaran jp LEFT JOIN guru g ON g.id = jp.guru_id
+      WHERE jp.guru_id IS NOT NULL
+      ORDER BY g.nama, jp.nama_mapel
+    `).all()
+    const map = {}
+    const guruBase = {}, guruCount = {}, guruWarnaIdx = {}
+    let nextNum = 1, nextWarna = 0
+    const SUFFIX = ['', 'a', 'b', 'c', 'd', 'e', 'f']
+    for (const p of pairs) {
+      if (!(p.guru_id in guruBase)) {
+        guruBase[p.guru_id] = nextNum++
+        guruWarnaIdx[p.guru_id] = nextWarna++
+        guruCount[p.guru_id] = 0
+      }
+      const idx = guruCount[p.guru_id]
+      const suf = idx < SUFFIX.length ? SUFFIX[idx] : String(idx)
+      guruCount[p.guru_id]++
+      map[`${p.guru_id}|${p.nama_mapel}`] = {
+        kode: `${guruBase[p.guru_id]}${suf}`,
+        warnaIdx: guruWarnaIdx[p.guru_id] % 12,
+        nama_guru: p.nama_guru, nama_mapel: p.nama_mapel,
+      }
+    }
+    return map
+  }
+
+  const HARI6 = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+  function getDataJadwalLengkap() {
+    const kelasList = sortKelasByTingkat(db.prepare('SELECT * FROM kelas').all())
+    const jamByHari = {}, isiByHari = {}
+    for (const hari of HARI6) {
+      jamByHari[hari] = getPengaturanJamHari(hari)
+      isiByHari[hari] = db.prepare('SELECT * FROM jadwal_pelajaran WHERE hari=?').all(hari)
+    }
+    const kodeGuruMap = buildKodeGuruMap()
+    const piketRows = db.prepare(`SELECT p.*, g.nama as nama_guru FROM piket_harian p LEFT JOIN guru g ON g.id=p.guru_id ORDER BY ${hariCase('p.hari')}, p.urutan`).all()
+    const piket = {}
+    HARI6.forEach(h => { piket[h] = piketRows.filter(p => p.hari === h).map(p => p.nama_guru).filter(Boolean) })
+    return { kelasList, hariList: HARI6, jamByHari, isiByHari, kodeGuruMap, piket }
+  }
+  ipcMain.handle('jadwal_pelajaran:preview_lengkap', () => getDataJadwalLengkap())
+
+  // ── Cek kapasitas: bandingkan total slot mengajar/minggu tiap kelas vs total kuota yg sudah diisi ──
+  // Dipakai UI supaya ketahuan SEBELUM generate kalau kuota kurang/lebih dari slot yg tersedia (penyebab paling umum jam bolong).
+  ipcMain.handle('jadwal_pelajaran:cek_kapasitas', () => {
+    const kelasList = sortKelasByTingkat(db.prepare('SELECT * FROM kelas').all())
+    const semuaJam = HARI6.flatMap(h => getPengaturanJamHari(h))
+    const totalSlotMinggu = semuaJam.filter(j => j.tipe === 'mengajar').length
+    return kelasList.map(k => {
+      const totalKuota = db.prepare('SELECT COALESCE(SUM(jumlah_jam),0) t FROM jam_mengajar WHERE kelas_id=?').get(k.id).t
+      const totalTerisi = db.prepare('SELECT COUNT(*) c FROM jadwal_pelajaran WHERE kelas_id=?').get(k.id).c
+      return {
+        kelas_id: k.id, nama_kelas: k.nama,
+        slot_tersedia: totalSlotMinggu, total_kuota: totalKuota, total_terisi: totalTerisi,
+        selisih_kuota: totalSlotMinggu - totalKuota, // >0 = kuota kurang dari slot (pasti akan ada jam kosong), <0 = kuota kelebihan (gak akan pernah muat semua)
+      }
+    })
+  })
+
+  ipcMain.handle('jadwal_pelajaran:export_excel', async () => {
+    try {
+      const { Workbook, S } = require('./excel-builder')
+      const s = db.prepare('SELECT * FROM sekolah WHERE id=1').get() || {}
+      const { kelasList, hariList, jamByHari, isiByHari, kodeGuruMap, piket } = getDataJadwalLengkap()
+      const N = Math.max(kelasList.length, 1)
+      const zoneCols = 2 + N // Jam, Waktu, + tiap kelas
+
+      const wb = new Workbook()
+      const ws = wb.addSheet('Jadwal Pelajaran')
+      ws.setPrintSetup({ landscape: false, paperSize: 8, fitToPage: true }) // A3 portrait, 1 halaman
+
+      const col1 = 1
+      const col2 = zoneCols + 2       // 1 kolom jarak
+      const col3 = col2 + zoneCols + 1
+      const totalCols = col3 + zoneCols - 1
+      const widths = []
+      for (let c = 1; c <= totalCols; c++) {
+        if (c === zoneCols + 1 || c === col3 - 1) { widths.push(2); continue } // kolom jarak antar zona
+        if (c >= col1 && c < col1 + zoneCols) {
+          const rel = c - col1
+          widths.push(rel === 0 ? 6 : 11) // Jam sempit, sisanya (Waktu + kelas) lebar normal
+        } else if (c >= col2 && c < col2 + zoneCols) {
+          const rel = c - col2
+          widths.push(rel === 0 ? 6 : 11)
+        } else {
+          widths.push(11) // zona 3, kolom Kode & Nama di-override di bawah
+        }
+      }
+      widths[col3 - 1] = 6  // kolom "Kode" zona 3 (legenda/piket)
+      widths[col3] = 30     // kolom "Nama Guru — Mapel" zona 3
+      ws.setColWidths(widths)
+
+      ws.putRow(1, 1, [`JADWAL PELAJARAN — ${s.nama_sekolah || ''}${s.tahun_ajaran ? '  |  Tahun Ajaran ' + s.tahun_ajaran : ''}`], 'title', 22)
+      ws.mergeCell(1, 1, 1, totalCols)
+      const topRow = 3
+
+      function drawHariTableExcel(startCol, startRow, hari) {
+        let r = startRow
+        const jamRows = (jamByHari[hari] || []).slice().sort((a, b) => a.jam_ke - b.jam_ke)
+        if (jamRows.length === 0) return r
+
+        ws.putRow(r, startCol, [hari.toUpperCase()], 'subheader', 18)
+        ws.mergeCell(r, startCol, r, startCol + zoneCols - 1)
+        r++
+        ws.putRow(r, startCol, ['Jam Ke', 'Waktu', ...kelasList.map(k => k.nama)], 'header', 18)
+        r++
+
+        jamRows.forEach(j => {
+          if (j.tipe !== 'mengajar') {
+            ws.putRow(r, startCol, [j.jam_ke, `${j.jam_mulai}-${j.jam_selesai}`, j.label || j.tipe, ...kelasList.slice(1).map(() => '')], S.NONMENGAJAR, 16)
+            if (kelasList.length > 1) ws.mergeCell(r, startCol + 2, r, startCol + zoneCols - 1)
+          } else {
+            const cells = [j.jam_ke, `${j.jam_mulai}-${j.jam_selesai}`]
+            const styles = [S.DEFAULT, S.DEFAULT]
+            kelasList.forEach(k => {
+              const isi = (isiByHari[hari] || []).find(x => x.kelas_id === k.id && x.jam_ke === j.jam_ke)
+              if (isi && isi.guru_id) {
+                const kg = kodeGuruMap[`${isi.guru_id}|${isi.nama_mapel}`]
+                cells.push(kg ? kg.kode : '?')
+                styles.push(kg ? S.GURU[kg.warnaIdx % 12] : S.KOSONG)
+              } else { cells.push(''); styles.push(S.KOSONG) }
+            })
+            ws.putRow(r, startCol, cells, styles, 16)
+          }
+          r++
+        })
+        return r + 1 // spasi kecil
+      }
+
+      const kolom1Hari = hariList.filter(h => ['Senin', 'Selasa', 'Rabu'].includes(h))
+      const kolom2Hari = hariList.filter(h => ['Kamis', 'Jumat', 'Sabtu'].includes(h))
+      const hariLain = hariList.filter(h => !kolom1Hari.includes(h) && !kolom2Hari.includes(h))
+
+      let r1 = topRow
+      kolom1Hari.concat(hariLain).forEach(hari => { r1 = drawHariTableExcel(col1, r1, hari) })
+
+      let r2 = topRow
+      kolom2Hari.forEach(hari => { r2 = drawHariTableExcel(col2, r2, hari) })
+
+      let r3 = topRow
+      const legendPairs = Object.values(kodeGuruMap).sort((a, b) => {
+        const na = parseInt(a.kode, 10), nb = parseInt(b.kode, 10)
+        return na !== nb ? na - nb : String(a.kode).localeCompare(String(b.kode))
+      })
+      if (legendPairs.length > 0) {
+        ws.putRow(r3, col3, ['KETERANGAN KODE GURU'], 'title', 20)
+        ws.mergeCell(r3, col3, r3, col3 + zoneCols - 1)
+        r3++
+        legendPairs.forEach(lg => {
+          ws.putRow(r3, col3, [lg.kode, `${lg.nama_guru || '-'} — ${lg.nama_mapel || '-'}`, ...Array(zoneCols - 2).fill('')], [S.GURU[lg.warnaIdx % 12], 'data_l', ...Array(zoneCols - 2).fill('data_l')], 16)
+          ws.mergeCell(r3, col3 + 1, r3, col3 + zoneCols - 1)
+          r3++
+        })
+        r3++
+      }
+
+      const piketHari = hariList.filter(h => (piket[h] || []).length > 0)
+      if (piketHari.length > 0) {
+        ws.putRow(r3, col3, ['JADWAL PIKET'], 'title', 20)
+        ws.mergeCell(r3, col3, r3, col3 + zoneCols - 1)
+        r3++
+        piketHari.forEach((hari, i) => {
+          ws.putRow(r3, col3, [hari, (piket[hari] || []).join(', '), ...Array(zoneCols - 2).fill('')], 'data_l', 16, i)
+          ws.mergeCell(r3, col3 + 1, r3, col3 + zoneCols - 1)
+          r3++
+        })
+      }
+
+      const filePath = path.join(outputPath, `Jadwal_Pelajaran_${Date.now()}.xlsx`)
+      await wb.writeFile(filePath)
+      shell.openPath(filePath)
+      return safeReturn({ ok: true })
+    } catch (e) { return safeReturn({ ok: false, error: String(e instanceof Error ? e.message : e) }) }
+  })
+
+
+  ipcMain.handle('jadwal_pelajaran:export_pdf', async () => {
+    try {
+      const { generateJadwalLengkap } = require('./pdf-generator')
+      const s = db.prepare('SELECT * FROM sekolah WHERE id=1').get() || {}
+      const data = getDataJadwalLengkap()
+      const fn = generateJadwalLengkap(outputPath, { sekolah: s, ...data })
+      await shell.openPath(fn)
+      return safeReturn({ ok: true })
+    } catch (e) { return safeReturn({ ok: false, error: String(e instanceof Error ? e.message : e) }) }
+  })
+
+  // ── Jadwal & cetak per guru (jadwal mengajar pribadi 1 guru) ────────────
+  ipcMain.handle('jadwal_pelajaran:get_by_guru', (_, guru_id) => {
+    return db.prepare(`
+      SELECT jp.*, k.nama as nama_kelas, k.tingkat as tingkat_kelas
+      FROM jadwal_pelajaran jp LEFT JOIN kelas k ON k.id = jp.kelas_id
+      WHERE jp.guru_id=? ORDER BY ${hariCase('jp.hari')}, jp.jam_ke
+    `).all(guru_id)
+  })
+
+  ipcMain.handle('jadwal_pelajaran:export_pdf_guru', async (_, guru_id) => {
+    try {
+      const { generateJadwalGuru } = require('./pdf-generator')
+      const s = db.prepare('SELECT * FROM sekolah WHERE id=1').get() || {}
+      const guru = db.prepare('SELECT * FROM guru WHERE id=?').get(guru_id)
+      if (!guru) return safeReturn({ ok: false, error: 'Guru tidak ditemukan.' })
+      const rows = db.prepare(`
+        SELECT jp.*, k.nama as nama_kelas FROM jadwal_pelajaran jp
+        LEFT JOIN kelas k ON k.id = jp.kelas_id
+        WHERE jp.guru_id=? ORDER BY ${hariCase('jp.hari')}, jp.jam_ke
+      `).all(guru_id)
+      const fn = generateJadwalGuru(outputPath, { sekolah: s, guru, rows })
+      await shell.openPath(fn)
+      return safeReturn({ ok: true })
+    } catch (e) { return safeReturn({ ok: false, error: String(e instanceof Error ? e.message : e) }) }
+  })
 
   // ── SK TUGAS TAMBAHAN ────────────────────────────────────────────────────
   ipcMain.handle('sk_tugas:list', () => db.prepare('SELECT s.*,g.nama as nama_guru FROM sk_tugas s LEFT JOIN guru g ON g.id=s.guru_id ORDER BY s.tahun_ajaran DESC,g.nama').all())
