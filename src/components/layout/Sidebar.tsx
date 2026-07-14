@@ -3,8 +3,8 @@ import {
   LayoutDashboard, School, Users, BookOpen, Settings,
   PenLine, Printer, GraduationCap, LogOut, ChevronRight,
   BarChart2, Upload, FileSpreadsheet, Hash, Trophy, ClipboardList,
-  BookOpen, BookMarked, TableProperties, Mail, Briefcase,
-  CreditCard, DollarSign, UserPlus, FileText, Users
+  BookMarked, TableProperties, Mail, Briefcase,
+  CreditCard, DollarSign, UserPlus, FileText, CalendarClock
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuth } from '../../hooks/useAuth'
@@ -15,6 +15,7 @@ export type PageKey =
   | 'rekap-cetak' | 'angkatan' | 'penomoran-surat' | 'ranking' | 'wali-kelas'
   | 'buku-kleper' | 'buku-induk' | 'leger-nilai' | 'surat' | 'kepegawaian'
   | 'kartu-ujian' | 'peserta-ujian' | 'rekap-bos' | 'ppdb' | 'raport'
+  | 'jadwal-pelajaran'
 
 interface NavItem {
   key: PageKey
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
   { key: 'leger-nilai', label: 'Leger Nilai Kelas',    icon: <TableProperties className="w-4 h-4" /> },
   { key: 'surat',       label: 'Surat-Surat',          icon: <Mail className="w-4 h-4" /> },
   { key: 'kepegawaian', label: 'Kepegawaian',          icon: <Briefcase className="w-4 h-4" />, group: 'KEPEGAWAIAN' },
+  { key: 'jadwal-pelajaran', label: 'Jadwal Pelajaran', icon: <CalendarClock className="w-4 h-4" />, group: 'PENJADWALAN' },
   { key: 'raport',      label: 'Raport Semester',      icon: <BookOpen className="w-4 h-4" />, group: 'RAPORT & UJIAN' },
   { key: 'kartu-ujian',   label: 'Kartu Peserta Ujian',  icon: <CreditCard className="w-4 h-4" /> },
   { key: 'peserta-ujian',  label: 'Peserta Ujian',         icon: <Users className="w-4 h-4" /> },
