@@ -2550,11 +2550,11 @@ function generateJadwalLengkap(outputPath, { sekolah: s, kelasList, hariList, ja
   const zoneW = (cw - GAP * 2) / 3
   const zoneX = [ml, ml + zoneW + GAP, ml + 2 * (zoneW + GAP)]
 
-  const JAM_W = 20, WAKTU_W = 40
+  const JAM_W = 27, WAKTU_W = 56
   const N = Math.max(kelasList.length, 1)
   const KELAS_W = (zoneW - JAM_W - WAKTU_W) / N
-  const ROW_H = 11.3, HEAD_H = 13, TITLE_H = 12.5
-  const FS_DATA = 6.6, FS_HEAD = 6.6, FS_TITLE = 7.6
+  const ROW_H = 21.5, HEAD_H = 24, TITLE_H = 23
+  const FS_DATA = 9, FS_HEAD = 9, FS_TITLE = 10.5
 
   function drawHariTable(x, yStart, hari) {
     let yy = yStart
@@ -2562,29 +2562,29 @@ function generateJadwalLengkap(outputPath, { sekolah: s, kelasList, hariList, ja
     if (jamRows.length === 0) return yy
 
     doc.rect(x, yy, zoneW, TITLE_H).fillAndStroke('#2e6da4', '#2e6da4')
-    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text(hari.toUpperCase(), x, yy + 2.6, { width: zoneW, align: 'center' })
+    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text(hari.toUpperCase(), x, yy + 5.5, { width: zoneW, align: 'center' })
     yy += TITLE_H
 
     doc.rect(x, yy, zoneW, HEAD_H).fillAndStroke('#1e3a5f', '#1e3a5f')
     doc.font(f.B).fontSize(FS_HEAD).fillColor('#fff')
-    doc.text('Jam', x, yy + 3.2, { width: JAM_W, align: 'center' })
-    doc.text('Waktu', x + JAM_W, yy + 3.2, { width: WAKTU_W, align: 'center' })
-    kelasList.forEach((k, i) => doc.text(k.nama, x + JAM_W + WAKTU_W + i * KELAS_W, yy + 3.2, { width: KELAS_W, align: 'center', ellipsis: true }))
+    doc.text('Jam', x, yy + 7, { width: JAM_W, align: 'center' })
+    doc.text('Waktu', x + JAM_W, yy + 7, { width: WAKTU_W, align: 'center' })
+    kelasList.forEach((k, i) => doc.text(k.nama, x + JAM_W + WAKTU_W + i * KELAS_W, yy + 7, { width: KELAS_W, align: 'center', ellipsis: true }))
     yy += HEAD_H
 
     jamRows.forEach(j => {
       if (j.tipe !== 'mengajar') {
         doc.rect(x, yy, JAM_W, ROW_H).fillAndStroke('#fff', '#ddd')
-        doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(String(j.jam_ke), x, yy + 2.4, { width: JAM_W, align: 'center' })
+        doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(String(j.jam_ke), x, yy + 6, { width: JAM_W, align: 'center' })
         doc.rect(x + JAM_W, yy, WAKTU_W, ROW_H).fillAndStroke('#fff', '#ddd')
-        doc.font(f.R).fontSize(5.8).fillColor('#333').text(`${j.jam_mulai}-${j.jam_selesai}`, x + JAM_W, yy + 2.4, { width: WAKTU_W, align: 'center' })
+        doc.font(f.R).fontSize(7.8).fillColor('#333').text(`${j.jam_mulai}-${j.jam_selesai}`, x + JAM_W, yy + 6.5, { width: WAKTU_W, align: 'center' })
         doc.rect(x + JAM_W + WAKTU_W, yy, zoneW - JAM_W - WAKTU_W, ROW_H).fillAndStroke('#FFE066', '#ddd')
-        doc.font(f.BI).fontSize(FS_DATA).fillColor('#5c4400').text(j.label || j.tipe, x + JAM_W + WAKTU_W, yy + 2.4, { width: zoneW - JAM_W - WAKTU_W, align: 'center' })
+        doc.font(f.BI).fontSize(FS_DATA).fillColor('#5c4400').text(j.label || j.tipe, x + JAM_W + WAKTU_W, yy + 6, { width: zoneW - JAM_W - WAKTU_W, align: 'center' })
       } else {
         doc.rect(x, yy, JAM_W, ROW_H).fillAndStroke('#f3f4f6', '#ddd')
-        doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(String(j.jam_ke), x, yy + 2.4, { width: JAM_W, align: 'center' })
+        doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(String(j.jam_ke), x, yy + 6, { width: JAM_W, align: 'center' })
         doc.rect(x + JAM_W, yy, WAKTU_W, ROW_H).fillAndStroke('#f3f4f6', '#ddd')
-        doc.font(f.R).fontSize(5.8).fillColor('#333').text(`${j.jam_mulai}-${j.jam_selesai}`, x + JAM_W, yy + 2.4, { width: WAKTU_W, align: 'center' })
+        doc.font(f.R).fontSize(7.8).fillColor('#333').text(`${j.jam_mulai}-${j.jam_selesai}`, x + JAM_W, yy + 6.5, { width: WAKTU_W, align: 'center' })
         kelasList.forEach((k, ki) => {
           const cx = x + JAM_W + WAKTU_W + ki * KELAS_W
           const isi = (isiByHari[hari] || []).find(r => r.kelas_id === k.id && r.jam_ke === j.jam_ke)
@@ -2592,7 +2592,7 @@ function generateJadwalLengkap(outputPath, { sekolah: s, kelasList, hariList, ja
             const kg = kodeGuruMap[`${isi.guru_id}|${isi.nama_mapel}`]
             const bg = kg ? GURU_HEX[kg.warnaIdx % 12] : '#eee'
             doc.rect(cx, yy, KELAS_W, ROW_H).fillAndStroke(bg, '#ddd')
-            doc.font(f.B).fontSize(FS_DATA + 0.4).fillColor('#1a1a2e').text(kg ? kg.kode : '?', cx, yy + 2.2, { width: KELAS_W, align: 'center' })
+            doc.font(f.B).fontSize(FS_DATA + 0.8).fillColor('#1a1a2e').text(kg ? kg.kode : '?', cx, yy + 5.5, { width: KELAS_W, align: 'center' })
           } else {
             doc.rect(cx, yy, KELAS_W, ROW_H).fillAndStroke('#fff', '#ddd')
           }
@@ -2600,7 +2600,7 @@ function generateJadwalLengkap(outputPath, { sekolah: s, kelasList, hariList, ja
       }
       yy += ROW_H
     })
-    return yy + 5
+    return yy + 9
   }
 
   const kolom1Hari = hariList.filter(h => ['Senin', 'Selasa', 'Rabu'].includes(h))
@@ -2618,35 +2618,35 @@ function generateJadwalLengkap(outputPath, { sekolah: s, kelasList, hariList, ja
     const na = parseInt(a.kode, 10), nb = parseInt(b.kode, 10)
     return na !== nb ? na - nb : String(a.kode).localeCompare(String(b.kode))
   })
-  const KODE_W = 24
+  const KODE_W = 32
   if (legendPairs.length > 0) {
     doc.rect(zoneX[2], y3, zoneW, TITLE_H).fillAndStroke('#1e3a5f', '#1e3a5f')
-    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text('KETERANGAN KODE GURU', zoneX[2], y3 + 2.6, { width: zoneW, align: 'center' })
+    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text('KETERANGAN KODE GURU', zoneX[2], y3 + 5.5, { width: zoneW, align: 'center' })
     y3 += TITLE_H
     legendPairs.forEach(lg => {
       const bg = GURU_HEX[lg.warnaIdx % 12]
       doc.rect(zoneX[2], y3, KODE_W, ROW_H).fillAndStroke(bg, '#ddd')
-      doc.font(f.B).fontSize(FS_DATA).fillColor('#1a1a2e').text(lg.kode, zoneX[2], y3 + 2.4, { width: KODE_W, align: 'center' })
+      doc.font(f.B).fontSize(FS_DATA).fillColor('#1a1a2e').text(lg.kode, zoneX[2], y3 + 6, { width: KODE_W, align: 'center' })
       doc.rect(zoneX[2] + KODE_W, y3, zoneW - KODE_W, ROW_H).fillAndStroke('#fff', '#ddd')
-      doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(`${lg.nama_guru || '-'} — ${lg.nama_mapel || '-'}`, zoneX[2] + KODE_W + 3, y3 + 2.4, { width: zoneW - KODE_W - 5, align: 'left', ellipsis: true })
+      doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text(`${lg.nama_guru || '-'} — ${lg.nama_mapel || '-'}`, zoneX[2] + KODE_W + 4, y3 + 6, { width: zoneW - KODE_W - 8, align: 'left', ellipsis: true })
       y3 += ROW_H
     })
-    y3 += 8
+    y3 += 14
   }
 
   const piketHari = hariList.filter(h => (piket[h] || []).length > 0)
   if (piketHari.length > 0) {
     doc.rect(zoneX[2], y3, zoneW, TITLE_H).fillAndStroke('#1e3a5f', '#1e3a5f')
-    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text('JADWAL PIKET', zoneX[2], y3 + 2.6, { width: zoneW, align: 'center' })
+    doc.font(f.B).fontSize(FS_TITLE).fillColor('#fff').text('JADWAL PIKET', zoneX[2], y3 + 5.5, { width: zoneW, align: 'center' })
     y3 += TITLE_H
-    const hariW = 55
+    const hariW = 74
     piketHari.forEach((hari, i) => {
       const bg = i % 2 === 0 ? '#f9fafb' : '#fff'
-      doc.rect(zoneX[2], y3, hariW, ROW_H * 1.6).fillAndStroke(bg, '#ddd')
-      doc.font(f.B).fontSize(FS_DATA).fillColor('#1e3a5f').text(hari, zoneX[2] + 3, y3 + 2, { width: hariW - 6, align: 'left' })
-      doc.rect(zoneX[2] + hariW, y3, zoneW - hariW, ROW_H * 1.6).fillAndStroke(bg, '#ddd')
-      doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text((piket[hari] || []).join(', '), zoneX[2] + hariW + 3, y3 + 2, { width: zoneW - hariW - 6, align: 'left' })
-      y3 += ROW_H * 1.6
+      doc.rect(zoneX[2], y3, hariW, ROW_H * 1.7).fillAndStroke(bg, '#ddd')
+      doc.font(f.B).fontSize(FS_DATA).fillColor('#1e3a5f').text(hari, zoneX[2] + 4, y3 + 6, { width: hariW - 8, align: 'left' })
+      doc.rect(zoneX[2] + hariW, y3, zoneW - hariW, ROW_H * 1.7).fillAndStroke(bg, '#ddd')
+      doc.font(f.R).fontSize(FS_DATA).fillColor('#333').text((piket[hari] || []).join(', '), zoneX[2] + hariW + 4, y3 + 6, { width: zoneW - hariW - 8, align: 'left' })
+      y3 += ROW_H * 1.7
     })
   }
 
