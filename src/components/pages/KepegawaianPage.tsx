@@ -364,6 +364,7 @@ function TabJamMengajar({ showToast }: any) {
   const [mapelList, setMapelList] = useState<any[]>([])
   const [data, setData] = useState<any[]>([])
   const [ta, setTa] = useState(new Date().getFullYear() + '/' + (new Date().getFullYear() + 1))
+  const [taApplied, setTaApplied] = useState(ta) // nilai yg BENERAN dipakai query — cuma berubah pas blur/Enter, bukan tiap huruf (ini yg tadinya bikin hilang fokus tiap ketik)
   const [modal, setModal] = useState<{ open: boolean; form: any }>({ open: false, form: {} })
   const [saving, setSaving] = useState(false)
   const [confirm, setConfirm] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
@@ -373,10 +374,10 @@ function TabJamMengajar({ showToast }: any) {
     kelasApi.list().then((r: any) => setKelasList(Array.isArray(r) ? r : []))
     mapelApi.list().then((r: any) => setMapelList(Array.isArray(r) ? r : []))
   }, [])
-  useEffect(() => { load() }, [ta])
+  useEffect(() => { load() }, [taApplied])
 
   const load = async () => {
-    const r = await jamMengajarApi.list(ta)
+    const r = await jamMengajarApi.list(taApplied)
     setData(Array.isArray(r) ? r : [])
   }
   const handleSave = async () => {
@@ -387,7 +388,7 @@ function TabJamMengajar({ showToast }: any) {
     await jamMengajarApi.save({ ...modal.form, tahun_ajaran: ta })
     setModal(m => ({ ...m, open: false }))
     showToast('Data jam mengajar disimpan')
-    load()
+    setTaApplied(ta) // pastikan tabel ikut refresh pakai tahun ajaran yg baru saja dipakai simpan
     setSaving(false)
   }
   const handleDelete = async () => {
@@ -408,7 +409,12 @@ function TabJamMengajar({ showToast }: any) {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-gray-700">Tahun Ajaran:</label>
-          <input value={ta} onChange={e => setTa(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-32" placeholder="2024/2025" />
+          <input
+            value={ta}
+            onChange={e => setTa(e.target.value)}
+            onBlur={() => setTaApplied(ta)}
+            onKeyDown={e => { if (e.key === 'Enter') setTaApplied(ta) }}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-32" placeholder="2024/2025" />
         </div>
         <span className="text-sm text-gray-500">Total: <strong>{totalJam}</strong> jam/minggu</span>
         <span className="text-xs text-gray-400">· Ini kuota mengajar. Untuk menempatkannya ke hari & jam, buka menu <strong>Jadwal Pelajaran</strong>.</span>
