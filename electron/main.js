@@ -2502,14 +2502,20 @@ function registerIPC() {
         asal_sekolah,tahun_masuk,kelas,no_hp_ortu,alamat,
         peserta_am,no_peserta,blanko,no_skl,no_skkb,jenis_kekhususan
       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      // UPDATE pakai COALESCE(?,kolom): kalau sel di Excel KOSONG (nilai jadi NULL), data lama di kolom itu
+      // TETAP DIPERTAHANKAN (tidak ditimpa jadi kosong). Cuma kolom yg ADA isinya di file yg benar-benar diganti.
       const stmtUpdate = db.prepare(`UPDATE siswa SET
-        no_urut=?,nism=?,nama=?,jk=?,tempat_lahir=?,tgl_lahir=?,
-        ortu=?,nama_ibu=?,agama=?,kewarganegaraan=?,anak_ke=?,
-        asal_sekolah=?,tahun_masuk=?,kelas=?,no_hp_ortu=?,alamat=?,
-        peserta_am=?,no_peserta=?,blanko=?,no_skl=?,no_skkb=?,jenis_kekhususan=?
+        no_urut=?,nism=COALESCE(?,nism),nama=COALESCE(?,nama),jk=COALESCE(?,jk),
+        tempat_lahir=COALESCE(?,tempat_lahir),tgl_lahir=COALESCE(?,tgl_lahir),
+        ortu=COALESCE(?,ortu),nama_ibu=COALESCE(?,nama_ibu),agama=COALESCE(?,agama),
+        kewarganegaraan=COALESCE(?,kewarganegaraan),anak_ke=COALESCE(?,anak_ke),
+        asal_sekolah=COALESCE(?,asal_sekolah),tahun_masuk=COALESCE(?,tahun_masuk),kelas=COALESCE(?,kelas),
+        no_hp_ortu=COALESCE(?,no_hp_ortu),alamat=COALESCE(?,alamat),
+        peserta_am=COALESCE(?,peserta_am),no_peserta=COALESCE(?,no_peserta),blanko=COALESCE(?,blanko),
+        no_skl=COALESCE(?,no_skl),no_skkb=COALESCE(?,no_skkb),jenis_kekhususan=COALESCE(?,jenis_kekhususan)
         WHERE nisn=?`)
       const stmtFind = db.prepare('SELECT id FROM siswa WHERE nisn=?')
-      let imported = 0, skipped = 0
+      let inserted = 0, updated = 0, skipped = 0
       const tx = db.transaction(() => {
         normalizedRows.forEach((row, i) => {
           const nama = mapField(row,'nama','nama_lengkap','name')
@@ -2517,45 +2523,58 @@ function registerIPC() {
           const no    = parseInt(mapField(row,'no','no_urut','nomor')) || (i + 1)
           const nisn  = mapField(row,'nisn') || null
           const jkRaw = mapField(row,'jenis_kelamin','jk','gender')
-          const jk    = /^p/i.test(jkRaw) ? 'Perempuan' : 'Laki-laki'
-          const vals = [
-            no,
-            mapField(row,'nism','nis','no_induk','no_nism') || null,
-            nisn, nama, jk,
-            mapField(row,'tempat_lahir','tempat_lahir_(yyyy-mm-dd)','tempat') || null,
-            mapField(row,'tanggal_lahir_(yyyy-mm-dd)','tgl_lahir','tanggal_lahir') || null,
-            mapField(row,'nama_ayah/wali','nama_ayah_wali','ortu','nama_ortu','orang_tua') || null,
-            mapField(row,'nama_ibu') || null,
-            mapField(row,'agama') || 'Islam',
-            mapField(row,'kewarganegaraan') || 'Indonesia',
-            mapField(row,'anak_ke-','anak_ke') || null,
-            mapField(row,'asal_sekolah') || null,
-            mapField(row,'tahun_masuk') || null,
-            mapField(row,'kelas') || null,
-            mapField(row,'no_hp_ortu','no_hp') || null,
-            mapField(row,'alamat') || null,
-            mapField(row,'no_peserta_am','peserta_am','no_peserta_am') || null,
-            mapField(row,'no_peserta_ujian_sekolah','no_peserta') || null,
-            mapField(row,'no_blanko_ijazah','blanko','no_blanko') || null,
-            mapField(row,'no_skl','nomor_skl') || null,
-            mapField(row,'no_skkb') || null,
-            mapField(row,'jenis_kekhususan') || null
-          ]
-          // Kalau NISN ada dan sudah exist -> UPDATE, kalau tidak -> INSERT baru
+          // Kosong -> null (biar UPDATE gak maksa ganti jenis kelamin yg sudah benar di data lama)
+          const jk    = jkRaw ? (/^p/i.test(jkRaw) ? 'Perempuan' : 'Laki-laki') : null
+          // Nilai "mentah" apa adanya dari file (null kalau kosong) — dipakai utk UPDATE (via COALESCE, aman)
+          const raw = {
+            nism: mapField(row,'nism','nis','no_induk','no_nism') || null,
+            tempat_lahir: mapField(row,'tempat_lahir','tempat_lahir_(yyyy-mm-dd)','tempat') || null,
+            tgl_lahir: mapField(row,'tanggal_lahir_(yyyy-mm-dd)','tgl_lahir','tanggal_lahir') || null,
+            ortu: mapField(row,'nama_ayah/wali','nama_ayah_wali','ortu','nama_ortu','orang_tua') || null,
+            nama_ibu: mapField(row,'nama_ibu') || null,
+            agama: mapField(row,'agama') || null,
+            kewarganegaraan: mapField(row,'kewarganegaraan') || null,
+            anak_ke: mapField(row,'anak_ke-','anak_ke') || null,
+            asal_sekolah: mapField(row,'asal_sekolah') || null,
+            tahun_masuk: mapField(row,'tahun_masuk') || null,
+            kelas: mapField(row,'kelas') || null,
+            no_hp_ortu: mapField(row,'no_hp_ortu','no_hp') || null,
+            alamat: mapField(row,'alamat') || null,
+            peserta_am: mapField(row,'no_peserta_am','peserta_am','no_peserta_am') || null,
+            no_peserta: mapField(row,'no_peserta_ujian_sekolah','no_peserta') || null,
+            blanko: mapField(row,'no_blanko_ijazah','blanko','no_blanko') || null,
+            no_skl: mapField(row,'no_skl','nomor_skl') || null,
+            no_skkb: mapField(row,'no_skkb') || null,
+            jenis_kekhususan: mapField(row,'jenis_kekhususan') || null,
+          }
+          // Kalau NISN ada dan sudah exist -> UPDATE (kolom kosong di file dilewati/dipertahankan),
+          // kalau tidak ketemu -> INSERT baru (di sini baru pantas pakai nilai default)
           const existing = nisn ? stmtFind.get(nisn) : null
           if (existing) {
-            // UPDATE: skip no_urut & nism & nisn (sudah di index 0,1,2), append id di akhir
-            stmtUpdate.run(vals[0],vals[1],vals[3],vals[4],vals[5],vals[6],vals[7],vals[8],
-              vals[9],vals[10],vals[11],vals[12],vals[13],vals[14],vals[15],vals[16],
-              vals[17],vals[18],vals[19],vals[20],vals[21],vals[22], nisn)
+            stmtUpdate.run(
+              no, raw.nism, nama, jk, raw.tempat_lahir, raw.tgl_lahir, raw.ortu, raw.nama_ibu,
+              raw.agama, raw.kewarganegaraan, raw.anak_ke, raw.asal_sekolah, raw.tahun_masuk, raw.kelas,
+              raw.no_hp_ortu, raw.alamat, raw.peserta_am, raw.no_peserta, raw.blanko, raw.no_skl,
+              raw.no_skkb, raw.jenis_kekhususan, nisn
+            )
+            updated++
           } else {
-            stmtInsert.run(...vals)
+            stmtInsert.run(
+              no, raw.nism, nisn, nama, jk || 'Laki-laki',
+              raw.tempat_lahir, raw.tgl_lahir, raw.ortu, raw.nama_ibu,
+              raw.agama || 'Islam', raw.kewarganegaraan || 'Indonesia', raw.anak_ke,
+              raw.asal_sekolah, raw.tahun_masuk, raw.kelas, raw.no_hp_ortu, raw.alamat,
+              raw.peserta_am, raw.no_peserta, raw.blanko, raw.no_skl, raw.no_skkb, raw.jenis_kekhususan
+            )
+            inserted++
           }
-          imported++
         })
       })
       tx()
-      return { ok: true, imported, skipped, message: `${imported} siswa berhasil diimport${skipped ? ', '+skipped+' dilewati (tidak ada nama)' : ''}` }
+      return {
+        ok: true, inserted, updated, skipped, imported: inserted + updated,
+        message: `${inserted} siswa baru ditambahkan, ${updated} data lama diperbarui${skipped ? ', ' + skipped + ' dilewati (tidak ada nama)' : ''}`
+      }
     } catch (e) {
       return { ok: false, message: 'Gagal membaca file: ' + e.message }
     }
